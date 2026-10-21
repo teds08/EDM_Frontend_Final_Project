@@ -147,6 +147,8 @@
 
   html {
     @apply font-sans;
+    scrollbar-width: thin;
+    scroll-behavior: smooth;
   }
 
   body {
