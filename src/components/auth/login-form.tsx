@@ -3,8 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Activity,
   AlertCircle,
   ArrowRight,
+  ChevronDown,
   Eye,
   EyeOff,
   LockKeyhole,
@@ -26,6 +28,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [demoRolesOpen, setDemoRolesOpen] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,41 +54,50 @@ export function LoginForm() {
     setEmail(userEmail);
     setPassword(userPassword);
     setError("");
+    setDemoRolesOpen(false);
   }
 
   return (
     <div className="w-full">
-      {/* Branding and heading */}
-      <div className="mb-8">
-        <div className="mb-6 flex size-14 items-center justify-center rounded-2xl bg-teal-700 text-white shadow-lg shadow-teal-700/15">
-          <ShieldCheck size={28} strokeWidth={1.8} />
+      {/* Centered Branding */}
+      <div className="mb-6 text-center">
+        <div className="relative mx-auto mb-4 flex size-[76px] items-center justify-center">
+          <div className="absolute inset-2 rotate-6 rounded-[23px] bg-teal-100" />
+
+          <div className="absolute inset-1 rounded-[23px] border border-teal-200/80 bg-white shadow-sm" />
+
+          <div className="relative flex size-[52px] items-center justify-center rounded-2xl bg-teal-700 text-white shadow-lg shadow-teal-700/20">
+            <ShieldCheck size={27} strokeWidth={1.7} />
+          </div>
+
+          <span className="absolute right-0 top-1 flex size-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500">
+            <span className="size-1.5 rounded-full bg-white" />
+          </span>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-3 flex justify-center">
           <Badge
             variant="outline"
-            className="border-teal-200 bg-teal-50 text-teal-800"
+            className="border-teal-200 bg-teal-50 px-3 py-1 text-teal-800"
           >
-            <ShieldCheck size={12} className="mr-1.5" />
+            <Activity size={12} className="mr-1.5" />
             Secure staff portal
           </Badge>
-
-          <span className="text-xs font-medium text-slate-400">CareBridge</span>
         </div>
 
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-          Welcome back.
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+          Welcome back
         </h1>
 
-        <p className="mt-3 max-w-md text-sm leading-6 text-slate-500">
-          Sign in to your healthcare operations workspace and continue where
-          your team left off.
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-5 text-slate-500">
+          Sign in to your CareBridge workspace to access your healthcare
+          operations dashboard.
         </p>
       </div>
 
-      {/* Login form */}
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-2">
+      {/* Login Form */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
           <Label
             htmlFor="login-email"
             className="text-sm font-medium text-slate-700"
@@ -109,13 +121,13 @@ export function LoginForm() {
                 setEmail(event.target.value);
                 setError("");
               }}
-              className="h-12 rounded-xl border-slate-200 bg-slate-50/60 pl-10 shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-teal-600 focus-visible:ring-offset-0"
+              className="h-11 rounded-xl border-slate-200 bg-slate-50/60 pl-10 shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-teal-600 focus-visible:ring-offset-0"
               required
             />
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-3">
             <Label
               htmlFor="login-password"
@@ -143,7 +155,7 @@ export function LoginForm() {
                 setPassword(event.target.value);
                 setError("");
               }}
-              className="h-12 rounded-xl border-slate-200 bg-slate-50/60 pl-10 pr-12 shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-teal-600 focus-visible:ring-offset-0"
+              className="h-11 rounded-xl border-slate-200 bg-slate-50/60 pl-10 pr-12 shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-teal-600 focus-visible:ring-offset-0"
               required
             />
 
@@ -162,20 +174,22 @@ export function LoginForm() {
         {error && (
           <div
             role="alert"
-            className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm leading-5 text-rose-700"
+            className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm leading-5 text-rose-700"
           >
             <AlertCircle size={17} className="mt-0.5 shrink-0" />
-
             <p>{error}</p>
           </div>
         )}
 
         <Button
           type="submit"
-          className="h-12 w-full cursor-pointer rounded-xl bg-teal-700 font-medium text-white shadow-sm transition-all hover:bg-teal-800"
+          className="group h-11 w-full cursor-pointer rounded-xl bg-teal-700 font-medium text-white shadow-sm transition-all hover:bg-teal-800"
         >
           Sign in to CareBridge
-          <ArrowRight size={17} className="ml-2" />
+          <ArrowRight
+            size={17}
+            className="ml-2 transition-transform group-hover:translate-x-0.5"
+          />
         </Button>
 
         <p className="text-center text-xs leading-5 text-slate-400">
@@ -183,71 +197,87 @@ export function LoginForm() {
         </p>
       </form>
 
-      {/* Demo accounts */}
-      <div className="my-7 flex items-center gap-3">
-        <div className="h-px flex-1 bg-slate-200" />
+      {/* Expandable Demo Roles */}
+      <div className="mt-5">
+        <button
+          type="button"
+          aria-expanded={demoRolesOpen}
+          aria-controls="demo-roles-list"
+          onClick={() => setDemoRolesOpen((previous) => !previous)}
+          className="group flex w-full cursor-pointer items-center gap-3 rounded-lg px-1 py-2 text-left transition-colors hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
+        >
+          <span className="h-px flex-1 bg-slate-200 transition-colors group-hover:bg-teal-300" />
 
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-          Explore demo roles
-        </span>
+          <span className="inline-flex shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 transition-colors group-hover:text-teal-800">
+            <UserRoundCheck size={14} />
+            Explore demo roles
+            <ChevronDown
+              size={14}
+              className={`transition-transform duration-200 ${
+                demoRolesOpen ? "rotate-180" : ""
+              }`}
+            />
+          </span>
 
-        <div className="h-px flex-1 bg-slate-200" />
-      </div>
+          <span className="h-px flex-1 bg-slate-200 transition-colors group-hover:bg-teal-300" />
+        </button>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {demoUsers.map((user) => (
-          <button
-            key={user.role}
-            type="button"
-            onClick={() => selectDemoAccount(user.email, user.password)}
-            className="group rounded-xl border border-slate-200 bg-white p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-300 hover:bg-teal-50/40 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
+        {demoRolesOpen && (
+          <div
+            id="demo-roles-list"
+            className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2"
           >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition-colors group-hover:bg-teal-100 group-hover:text-teal-800">
-                <UserRoundCheck size={17} />
-              </div>
+            {demoUsers.map((user) => (
+              <button
+                key={user.role}
+                type="button"
+                onClick={() => selectDemoAccount(user.email, user.password)}
+                className="group flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition-all duration-200 hover:border-teal-300 hover:bg-teal-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+              >
+                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition-colors group-hover:bg-teal-100 group-hover:text-teal-800">
+                  <UserRoundCheck size={15} />
+                </div>
 
-              <ArrowRight
-                size={15}
-                className="text-slate-300 transition-all group-hover:translate-x-0.5 group-hover:text-teal-700"
-              />
-            </div>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-semibold text-slate-800">
+                    {user.roleLabel}
+                  </span>
 
-            <span className="block text-sm font-semibold text-slate-800">
-              {user.roleLabel}
-            </span>
+                  <span className="mt-0.5 block truncate text-[10px] text-slate-500">
+                    {user.email}
+                  </span>
+                </div>
 
-            <span className="mt-1 block break-all text-xs leading-5 text-slate-500">
-              {user.email}
-            </span>
+                <ArrowRight
+                  size={14}
+                  className="shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700"
+                />
+              </button>
+            ))}
+          </div>
+        )}
 
-            <span className="mt-3 inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 transition-colors group-hover:bg-teal-100 group-hover:text-teal-800">
-              Fill demo credentials
-            </span>
-          </button>
-        ))}
+        <p className="mt-2 text-center text-[11px] leading-4 text-slate-400">
+          {demoRolesOpen
+            ? "Select a role to fill in its demo credentials."
+            : "Optional · Click to view available demo accounts."}
+        </p>
       </div>
 
-      <div className="mt-4 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-        <LockKeyhole size={16} className="mt-0.5 shrink-0 text-slate-500" />
+      {/* Compact Demo Credentials Notice */}
+      <div className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+        <LockKeyhole size={13} className="shrink-0 text-slate-400" />
 
-        <div>
-          <p className="text-xs font-semibold text-slate-700">
-            Demo credentials
-          </p>
-
-          <p className="mt-1 text-xs leading-5 text-slate-500">
-            The sample accounts use the password{" "}
-            <span className="font-semibold text-slate-700">Demo123!</span>.
-            Select a role above to fill in its credentials.
-          </p>
-        </div>
+        <p className="text-[11px] leading-4 text-slate-500">
+          Demo password:{" "}
+          <span className="font-semibold text-slate-700">Demo123!</span>
+        </p>
       </div>
 
-      {/* Administrator-managed access */}
-      <div className="mt-6 border-t border-slate-200 pt-5">
+      {/* Administrator-Managed Access */}
+      <div className="mt-4 border-t border-slate-200 pt-4">
         <div className="flex items-start justify-center gap-2 text-center">
-          <ShieldCheck size={15} className="mt-0.5 shrink-0 text-teal-700" />
+          <ShieldCheck size={14} className="mt-0.5 shrink-0 text-teal-700" />
 
           <p className="max-w-sm text-xs leading-5 text-slate-500">
             Need a staff account? Contact your CareBridge administrator. Public
