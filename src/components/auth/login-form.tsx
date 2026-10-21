@@ -61,13 +61,18 @@ export function LoginForm() {
     <div className="w-full">
       {/* Centered Branding */}
       <div className="mb-6 text-center">
+        {/* Brand Icon */}
         <div className="relative mx-auto mb-4 flex size-[76px] items-center justify-center">
-          <div className="absolute inset-2 rotate-6 rounded-[23px] bg-teal-100" />
+          <div className="absolute inset-2 rotate-6 rounded-[23px] bg-teal-100 transition-transform duration-300 hover:rotate-12" />
 
           <div className="absolute inset-1 rounded-[23px] border border-teal-200/80 bg-white shadow-sm" />
 
-          <div className="relative flex size-[52px] items-center justify-center rounded-2xl bg-teal-700 text-white shadow-lg shadow-teal-700/20">
-            <ShieldCheck size={27} strokeWidth={1.7} />
+          <div className="group relative flex size-[52px] items-center justify-center rounded-2xl bg-teal-700 text-white shadow-lg shadow-teal-700/20 transition-all duration-300 hover:scale-105 hover:bg-teal-800">
+            <ShieldCheck
+              size={27}
+              strokeWidth={1.7}
+              className="transition-transform duration-300 group-hover:scale-110"
+            />
           </div>
 
           <span className="absolute right-0 top-1 flex size-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500">
@@ -75,6 +80,7 @@ export function LoginForm() {
           </span>
         </div>
 
+        {/* Portal Badge */}
         <div className="mb-3 flex justify-center">
           <Badge
             variant="outline"
@@ -85,13 +91,19 @@ export function LoginForm() {
           </Badge>
         </div>
 
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+        {/* Brand Slogan */}
+        <p className="text-sm font-semibold tracking-tight text-teal-800">
+          Connecting Healthcare Data.
+          <span className="block text-teal-700">Bridging Better Care.</span>
+        </p>
+
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">
           Welcome back
         </h1>
 
         <p className="mx-auto mt-2 max-w-sm text-sm leading-5 text-slate-500">
-          Sign in to your CareBridge workspace to access your healthcare
-          operations dashboard.
+          Access your workspace for patient information, laboratory operations,
+          billing, and insurance workflows.
         </p>
       </div>
 
