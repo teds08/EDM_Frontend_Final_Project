@@ -1,11 +1,5 @@
-import { DemoDashboardPlaceholder } from "@/components/auth/demo-dashboard-placeholder";
+import { RegistrationDashboardView } from "@/components/registration/dashboard/registration-dashboard-view";
 
 export default function RegistrationDashboardPage() {
-  return (
-    <DemoDashboardPlaceholder
-      role="Registration Staff"
-      title="Registration Dashboard"
-      description="Register patients, manage patient information, and review possible duplicate records."
-    />
-  );
+  return <RegistrationDashboardView />;
 }
