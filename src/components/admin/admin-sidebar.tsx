@@ -5,10 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
-  Database,
   LayoutDashboard,
   LogOut,
-  Network,
   ScrollText,
   ShieldCheck,
   Users,
@@ -43,16 +41,6 @@ const navigation: {
     label: "User Management",
     href: "/admin/users",
     icon: Users,
-  },
-  {
-    label: "Integrations",
-    href: "/admin/integrations",
-    icon: Network,
-  },
-  {
-    label: "Data Quality",
-    href: "/admin/data-quality",
-    icon: Database,
   },
   {
     label: "Audit Logs",
@@ -94,7 +82,7 @@ export function AdminSidebar() {
               CareBridge
             </h2>
 
-            <p className="text-xs text-slate-400">Healthcare Integration</p>
+            <p className="text-xs text-slate-400">Healthcare Data Platform</p>
           </div>
         </div>
 

@@ -24,7 +24,6 @@ export function AdminHeader() {
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   function handleLogout() {
-    // Clear the saved browser authentication data.
     window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
     window.sessionStorage.removeItem(AUTH_ROLE_KEY);
 
@@ -50,7 +49,7 @@ export function AdminHeader() {
             variant="outline"
             className="hidden border-teal-200 bg-teal-50 text-teal-800 sm:inline-flex"
           >
-            Live API
+            User API
           </Badge>
 
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />

@@ -9,11 +9,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
-  Database,
   FlaskConical,
-  Network,
   ReceiptText,
-  ShieldCheck,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -29,37 +26,57 @@ import {
 
 import { adminDashboardData } from "@/data/admin-dashboard/dummy-data";
 
-type ActivityFilter = "all" | "review";
+type ActivityFilter = "all" | "unpaid";
 
 const statIcons: Record<string, LucideIcon> = {
   patients: Users,
   orders: FlaskConical,
   invoices: ReceiptText,
-  quality: ShieldCheck,
 };
 
 const statColors: Record<string, string> = {
   patients: "bg-blue-50 text-blue-700",
   orders: "bg-teal-50 text-teal-700",
   invoices: "bg-amber-50 text-amber-700",
-  quality: "bg-rose-50 text-rose-700",
-};
-
-const integrationIcons: Record<string, LucideIcon> = {
-  EMR: Users,
-  LIS: FlaskConical,
-  Billing: ReceiptText,
-  Insurance: ShieldCheck,
 };
 
 const activityStatusStyles: Record<string, string> = {
   Success: "border-emerald-200 bg-emerald-50 text-emerald-700",
   Review: "border-amber-200 bg-amber-50 text-amber-800",
   Warning: "border-rose-200 bg-rose-50 text-rose-700",
+  Unpaid: "border-rose-200 bg-rose-50 text-rose-700",
+  Overdue: "border-rose-200 bg-rose-50 text-rose-700",
+  Pending: "border-amber-200 bg-amber-50 text-amber-800",
 };
+
+function isUnpaidInvoiceActivity(activity: {
+  action: string;
+  record: string;
+  status: string;
+}) {
+  const activityText =
+    `${activity.action} ${activity.record} ${activity.status}`.toLowerCase();
+
+  const isInvoiceRelated =
+    /\binvoice\b|\bbilling\b|\bpayment\b|\breceipt\b|\binv[-#]?\d/i.test(
+      activityText,
+    );
+
+  const needsPayment =
+    /\bunpaid\b|\boverdue\b|\bpayment pending\b|\bawaiting payment\b|\bpayment due\b/.test(
+      activityText,
+    );
+
+  return isInvoiceRelated && needsPayment;
+}
 
 export default function AdminDashboardView() {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+
+  // Exclude the former Data Quality statistic.
+  const visibleStats = adminDashboardData.stats.filter(
+    (stat) => stat.icon !== "quality",
+  );
 
   const maxOrders = Math.max(
     ...adminDashboardData.weeklyOrders.map((item) => item.count),
@@ -71,13 +88,16 @@ export default function AdminDashboardView() {
     0,
   );
 
-  const reviewCount = adminDashboardData.activities.filter(
-    (activity) => activity.status !== "Success",
-  ).length;
-
-  const filteredActivities = adminDashboardData.activities.filter(
-    (activity) => activityFilter === "all" || activity.status !== "Success",
+  const unpaidInvoiceActivities = adminDashboardData.activities.filter(
+    isUnpaidInvoiceActivity,
   );
+
+  const unpaidInvoiceCount = unpaidInvoiceActivities.length;
+
+  const filteredActivities =
+    activityFilter === "unpaid"
+      ? unpaidInvoiceActivities
+      : adminDashboardData.activities;
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-7">
@@ -95,23 +115,23 @@ export default function AdminDashboardView() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Monitor healthcare data, laboratory operations, integration sources,
-            and data quality in one workspace.
+            Monitor staff access, laboratory activity, billing summaries, and
+            recent system events in one workspace.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/admin/data-quality"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+            href="/admin/users"
+            className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
           >
-            <Database size={16} />
-            Data Quality
+            <Users size={16} />
+            User Management
           </Link>
 
           <Link
             href="/admin/audit-logs"
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-800"
+            className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg bg-teal-700 px-4 text-sm font-medium text-white shadow-sm transition-colors hover:bg-teal-800"
           >
             <Activity size={16} />
             Audit Logs
@@ -140,14 +160,14 @@ export default function AdminDashboardView() {
           </div>
 
           <p className="mt-1 text-sm leading-5 text-amber-900/80">
-            All patient counts, transactions, audit activities, and integration
-            statuses are sample values. No live healthcare systems are
-            connected.
+            Dashboard statistics, laboratory activity, and billing activity are
+            illustrative values. User management is connected to the backend
+            separately.
           </p>
         </div>
       </section>
 
-      {/* Statistics */}
+      {/* Operational statistics */}
       <section className="space-y-4">
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -165,8 +185,8 @@ export default function AdminDashboardView() {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {adminDashboardData.stats.map((stat) => {
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleStats.map((stat) => {
             const Icon = statIcons[stat.icon] ?? Activity;
 
             return (
@@ -187,19 +207,16 @@ export default function AdminDashboardView() {
                     </div>
 
                     <div
-                      className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${statColors[stat.icon] ?? "bg-slate-100 text-slate-700"}`}
+                      className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${
+                        statColors[stat.icon] ?? "bg-slate-100 text-slate-700"
+                      }`}
                     >
                       <Icon size={21} strokeWidth={1.8} />
                     </div>
                   </div>
 
                   <div className="mt-4 flex min-h-5 items-center gap-1.5">
-                    {stat.icon === "quality" ? (
-                      <AlertTriangle
-                        size={13}
-                        className="shrink-0 text-amber-600"
-                      />
-                    ) : stat.icon === "invoices" ? (
+                    {stat.icon === "invoices" ? (
                       <ArrowDownRight
                         size={13}
                         className="shrink-0 text-amber-600"
@@ -222,9 +239,8 @@ export default function AdminDashboardView() {
         </div>
       </section>
 
-      {/* Chart and integration sources */}
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        {/* Laboratory chart */}
+      {/* Laboratory activity */}
+      <section>
         <Card className="min-w-0 border-slate-200/80 shadow-sm shadow-slate-200/30">
           <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
             <div>
@@ -258,8 +274,8 @@ export default function AdminDashboardView() {
                 variant="outline"
                 className="border-teal-200 bg-teal-50 text-teal-800"
               >
-                <Database size={12} className="mr-1.5" />
-                Sample records
+                <Clock3 size={12} className="mr-1.5" />
+                Seven-day overview
               </Badge>
             </div>
 
@@ -304,151 +320,10 @@ export default function AdminDashboardView() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Integration sources */}
-        <Card className="min-w-0 border-slate-200/80 shadow-sm shadow-slate-200/30">
-          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-            <div>
-              <CardTitle className="text-base font-semibold">
-                Integration Sources
-              </CardTitle>
-
-              <CardDescription className="mt-1.5">
-                Healthcare data sources represented in the project.
-              </CardDescription>
-            </div>
-
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-              <Network size={20} />
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            <div className="space-y-1">
-              {adminDashboardData.sources.map((source) => {
-                const Icon = integrationIcons[source.name] ?? Database;
-
-                const isManual = source.status === "Manual entry";
-
-                return (
-                  <div
-                    key={source.name}
-                    className="flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-slate-50"
-                  >
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-slate-100 bg-white text-slate-600">
-                      <Icon size={19} strokeWidth={1.8} />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-slate-800">
-                          {source.name}
-                        </p>
-
-                        <Badge
-                          variant="outline"
-                          className={
-                            isManual
-                              ? "border-slate-200 bg-slate-50 text-slate-600"
-                              : "border-blue-200 bg-blue-50 text-blue-700"
-                          }
-                        >
-                          {source.status}
-                        </Badge>
-                      </div>
-
-                      <p className="mt-1 text-xs leading-5 text-slate-500">
-                        {source.description}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 p-3">
-              <Network size={15} className="mt-0.5 shrink-0 text-slate-500" />
-
-              <p className="text-xs leading-5 text-slate-500">
-                These entries represent the modules in the prototype. Their
-                statuses do not indicate live external connections.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
       </section>
 
-      {/* Data quality and audit activity */}
-      <section className="grid grid-cols-1 gap-5 xl:grid-cols-[0.85fr_1.5fr]">
-        {/* Data quality */}
-        <Card className="min-w-0 border-slate-200/80 shadow-sm shadow-slate-200/30">
-          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
-            <div>
-              <CardTitle className="text-base font-semibold">
-                Data Quality Overview
-              </CardTitle>
-
-              <CardDescription className="mt-1.5">
-                Sample issues found during validation.
-              </CardDescription>
-            </div>
-
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
-              <ShieldCheck size={20} />
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-3">
-            {adminDashboardData.qualityIssues.map((issue) => {
-              const isCritical = issue.id === "DQ-002";
-
-              return (
-                <div
-                  key={issue.id}
-                  className="flex items-start gap-3 rounded-xl border border-slate-100 p-3.5 transition-colors hover:bg-slate-50/80"
-                >
-                  <div
-                    className={`mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg ${
-                      isCritical
-                        ? "bg-rose-50 text-rose-700"
-                        : "bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    <AlertTriangle size={17} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium leading-5 text-slate-800">
-                      {issue.title}
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      {issue.description}
-                    </p>
-                  </div>
-
-                  <div className="flex min-w-7 flex-col items-end">
-                    <span className="text-lg font-semibold tabular-nums text-slate-900">
-                      {issue.count}
-                    </span>
-
-                    <span className="text-[10px] text-slate-400">records</span>
-                  </div>
-                </div>
-              );
-            })}
-
-            <Link
-              href="/admin/data-quality"
-              className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:border-teal-200 hover:bg-teal-50 hover:text-teal-800"
-            >
-              Review data quality
-              <ArrowRight size={15} />
-            </Link>
-          </CardContent>
-        </Card>
-
-        {/* Recent activity */}
+      {/* Recent activity */}
+      <section>
         <Card className="min-w-0 border-slate-200/80 shadow-sm shadow-slate-200/30">
           <CardHeader className="gap-4">
             <div className="flex items-start justify-between gap-3">
@@ -458,7 +333,7 @@ export default function AdminDashboardView() {
                 </CardTitle>
 
                 <CardDescription className="mt-1.5">
-                  Sample actions recorded across the system.
+                  Review recent patient, laboratory, and billing activities.
                 </CardDescription>
               </div>
 
@@ -467,7 +342,7 @@ export default function AdminDashboardView() {
               </div>
             </div>
 
-            {/* Interactive filter */}
+            {/* Activity filters */}
             <div
               className="flex w-fit items-center gap-1 rounded-lg bg-slate-100 p-1"
               aria-label="Filter recent activity"
@@ -476,29 +351,30 @@ export default function AdminDashboardView() {
                 type="button"
                 aria-pressed={activityFilter === "all"}
                 onClick={() => setActivityFilter("all")}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                   activityFilter === "all"
                     ? "bg-white text-slate-900 shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                All activity
+                All Activity
               </button>
 
               <button
                 type="button"
-                aria-pressed={activityFilter === "review"}
-                onClick={() => setActivityFilter("review")}
-                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  activityFilter === "review"
+                aria-pressed={activityFilter === "unpaid"}
+                onClick={() => setActivityFilter("unpaid")}
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  activityFilter === "unpaid"
                     ? "bg-white text-slate-900 shadow-sm"
                     : "text-slate-500 hover:text-slate-800"
                 }`}
               >
-                Needs review
-                {reviewCount > 0 && (
-                  <span className="flex size-4 items-center justify-center rounded-full bg-amber-100 text-[10px] text-amber-800">
-                    {reviewCount}
+                <ReceiptText size={13} />
+                Unpaid Invoices
+                {unpaidInvoiceCount > 0 && (
+                  <span className="flex size-4 items-center justify-center rounded-full bg-rose-100 text-[10px] text-rose-800">
+                    {unpaidInvoiceCount}
                   </span>
                 )}
               </button>
@@ -515,11 +391,15 @@ export default function AdminDashboardView() {
                     </th>
 
                     <th className="whitespace-nowrap px-5 py-3 text-xs font-semibold text-slate-500">
-                      User
+                      Patient
                     </th>
 
                     <th className="whitespace-nowrap px-5 py-3 text-xs font-semibold text-slate-500">
-                      Record
+                      Handled By
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-3 text-xs font-semibold text-slate-500">
+                      Reference ID
                     </th>
 
                     <th className="whitespace-nowrap px-5 py-3 text-xs font-semibold text-slate-500">
@@ -545,12 +425,20 @@ export default function AdminDashboardView() {
                       </td>
 
                       <td className="whitespace-nowrap px-5 py-4">
+                        <p className="font-medium text-slate-800">
+                          {activity.patient}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-400">Patient</p>
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4">
                         <p className="font-medium text-slate-700">
-                          {activity.user}
+                          {activity.handledBy}
                         </p>
 
                         <p className="mt-1 text-xs text-slate-400">
-                          {activity.role}
+                          {activity.handledByRole}
                         </p>
                       </td>
 
@@ -574,19 +462,27 @@ export default function AdminDashboardView() {
 
                   {filteredActivities.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center">
+                      <td colSpan={5} className="px-5 py-10 text-center">
                         <div className="flex flex-col items-center gap-2">
-                          <CheckCircle2
-                            size={23}
-                            className="text-emerald-600"
-                          />
+                          {activityFilter === "unpaid" ? (
+                            <CheckCircle2
+                              size={23}
+                              className="text-emerald-600"
+                            />
+                          ) : (
+                            <Clock3 size={23} className="text-slate-400" />
+                          )}
 
                           <p className="text-sm font-medium text-slate-700">
-                            No activities need review
+                            {activityFilter === "unpaid"
+                              ? "No unpaid invoices found"
+                              : "No recent activity"}
                           </p>
 
                           <p className="text-xs text-slate-500">
-                            There are no flagged events in this demo dataset.
+                            {activityFilter === "unpaid"
+                              ? "There are no activities explicitly marked as unpaid or overdue in the current demo data."
+                              : "There are no activity records to display."}
                           </p>
                         </div>
                       </td>
@@ -619,7 +515,7 @@ export default function AdminDashboardView() {
         <p>CareBridge · Healthcare Data Integration</p>
 
         <p className="inline-flex items-center gap-1.5">
-          <Database size={13} />
+          <Users size={13} />
           Academic project · Fictional records only
         </p>
       </footer>

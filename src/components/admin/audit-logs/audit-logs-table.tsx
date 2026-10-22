@@ -24,24 +24,25 @@ export function AuditLogsTable({ logs, onView }: AuditLogsTableProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm shadow-slate-200/30">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1050px] text-left text-sm">
+        <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80">
               <th className="px-5 py-3.5 text-xs font-semibold text-slate-500">
                 Event
               </th>
+
               <th className="px-5 py-3.5 text-xs font-semibold text-slate-500">
                 User / Actor
               </th>
-              <th className="px-5 py-3.5 text-xs font-semibold text-slate-500">
-                Category
-              </th>
+
               <th className="px-5 py-3.5 text-xs font-semibold text-slate-500">
                 Outcome
               </th>
+
               <th className="px-5 py-3.5 text-xs font-semibold text-slate-500">
                 Timestamp
               </th>
+
               <th className="px-5 py-3.5 text-right text-xs font-semibold text-slate-500">
                 Details
               </th>
@@ -78,15 +79,6 @@ export function AuditLogsTable({ logs, onView }: AuditLogsTableProps) {
                   <p className="mt-1 whitespace-nowrap text-xs text-slate-500">
                     {log.role}
                   </p>
-                </td>
-
-                <td className="px-5 py-4">
-                  <Badge
-                    variant="outline"
-                    className="border-slate-200 bg-white text-slate-700"
-                  >
-                    {log.category}
-                  </Badge>
                 </td>
 
                 <td className="whitespace-nowrap px-5 py-4">
@@ -126,7 +118,7 @@ export function AuditLogsTable({ logs, onView }: AuditLogsTableProps) {
 
             {logs.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-14 text-center">
+                <td colSpan={5} className="px-5 py-14 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Eye size={27} className="text-slate-300" />
 

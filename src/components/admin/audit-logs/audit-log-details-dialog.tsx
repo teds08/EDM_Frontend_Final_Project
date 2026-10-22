@@ -6,7 +6,6 @@ import {
   Clock,
   Copy,
   FileText,
-  Globe,
   ShieldCheck,
   X,
   XCircle,
@@ -128,7 +127,6 @@ export function AuditLogDetailsDialog({
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="flex items-center gap-2 text-slate-500">
                 <FileText size={16} />
-
                 <p className="text-xs font-medium">Event ID</p>
               </div>
 
@@ -153,7 +151,6 @@ export function AuditLogDetailsDialog({
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="flex items-center gap-2 text-slate-500">
                 <Clock size={16} />
-
                 <p className="text-xs font-medium">Timestamp</p>
               </div>
 
@@ -166,7 +163,6 @@ export function AuditLogDetailsDialog({
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="flex items-center gap-2 text-slate-500">
                 <ShieldCheck size={16} />
-
                 <p className="text-xs font-medium">Actor</p>
               </div>
 
@@ -175,19 +171,6 @@ export function AuditLogDetailsDialog({
               </p>
 
               <p className="mt-1 text-xs text-slate-500">{log.role}</p>
-            </div>
-
-            {/* IP Address */}
-            <div className="rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center gap-2 text-slate-500">
-                <Globe size={16} />
-
-                <p className="text-xs font-medium">IP address</p>
-              </div>
-
-              <p className="mt-2 font-mono text-sm font-semibold text-slate-800">
-                {log.ipAddress}
-              </p>
             </div>
           </div>
 
@@ -211,7 +194,7 @@ export function AuditLogDetailsDialog({
             <p className="mt-2 text-sm text-slate-600">{log.resource}</p>
 
             <p className="mt-1 text-xs text-slate-400">
-              Resource ID: {log.resourceId}
+              Reference ID: {log.resourceId}
             </p>
           </div>
 

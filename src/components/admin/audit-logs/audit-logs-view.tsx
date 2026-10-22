@@ -12,59 +12,46 @@ import { AuditLogDetailsDialog } from "@/components/admin/audit-logs/audit-log-d
 import { initialAuditLogs } from "@/data/admin-audit-logs/dummy-data";
 
 import type {
-  AuditCategory,
   AuditLog,
   AuditOutcome,
 } from "@/types/admin-audit-logs/audit-log";
 
-type CategoryFilter = "All" | AuditCategory;
 type OutcomeFilter = "All" | AuditOutcome;
-
-const categories: AuditCategory[] = [
-  "Authentication",
-  "User Management",
-  "Integration",
-  "Data Quality",
-  "System",
-];
 
 export default function AuditLogsView() {
   const [logs] = useState<AuditLog[]>(initialAuditLogs);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("All");
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>("All");
-
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
   const filteredLogs = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
     return logs.filter((log) => {
+      const searchableValues = [
+        log.id,
+        log.actor,
+        log.role,
+        log.action,
+        log.outcome,
+        log.resource,
+        log.resourceId,
+        log.details,
+      ];
+
       const matchesSearch =
         normalizedQuery.length === 0 ||
-        [
-          log.id,
-          log.actor,
-          log.role,
-          log.action,
-          log.category,
-          log.outcome,
-          log.resource,
-          log.resourceId,
-          log.details,
-          log.ipAddress,
-        ].some((value) => value.toLowerCase().includes(normalizedQuery));
-
-      const matchesCategory =
-        categoryFilter === "All" || log.category === categoryFilter;
+        searchableValues.some((value) =>
+          value.toLowerCase().includes(normalizedQuery),
+        );
 
       const matchesOutcome =
         outcomeFilter === "All" || log.outcome === outcomeFilter;
 
-      return matchesSearch && matchesCategory && matchesOutcome;
+      return matchesSearch && matchesOutcome;
     });
-  }, [logs, searchQuery, categoryFilter, outcomeFilter]);
+  }, [logs, searchQuery, outcomeFilter]);
 
   const successfulCount = logs.filter(
     (log) => log.outcome === "Success",
@@ -75,13 +62,10 @@ export default function AuditLogsView() {
   const failedCount = logs.filter((log) => log.outcome === "Failed").length;
 
   const hasActiveFilters =
-    searchQuery.trim().length > 0 ||
-    categoryFilter !== "All" ||
-    outcomeFilter !== "All";
+    searchQuery.trim().length > 0 || outcomeFilter !== "All";
 
   function clearFilters() {
     setSearchQuery("");
-    setCategoryFilter("All");
     setOutcomeFilter("All");
   }
 
@@ -101,8 +85,8 @@ export default function AuditLogsView() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Review recorded system activities, identify unsuccessful operations,
-            and inspect event details for accountability.
+            Track important changes to user accounts, patient records,
+            laboratory results, and invoices for accountability.
           </p>
         </div>
       </section>
@@ -119,9 +103,9 @@ export default function AuditLogsView() {
           </h2>
 
           <p className="mt-1 text-sm leading-5 text-amber-900/80">
-            These are fictional sample audit records. They do not represent
-            actual logins, user actions, external system connections, or
-            healthcare transactions.
+            These are fictional audit records representing important changes.
+            Routine page views, login attempts, and reviews that do not change
+            data are excluded from this sample audit trail.
           </p>
         </div>
       </section>
@@ -134,7 +118,7 @@ export default function AuditLogsView() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Summary counts are based on the full sample audit dataset.
+            Outcome counts are based on the complete sample audit dataset.
           </p>
         </div>
 
@@ -154,8 +138,8 @@ export default function AuditLogsView() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Search and filter recorded events, then open any event to view its
-            details.
+            Search recorded changes, filter by outcome, and inspect individual
+            events for more information.
           </p>
         </div>
 
@@ -172,62 +156,34 @@ export default function AuditLogsView() {
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search by event, user, resource, ID, or IP address..."
+                placeholder="Search by event, user, resource, reference ID, or details..."
                 aria-label="Search audit logs"
                 className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:ring-1 focus-visible:ring-teal-600"
               />
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="audit-category-filter"
-                    className="text-xs font-medium text-slate-500"
-                  >
-                    Category
-                  </label>
+              <div className="w-full space-y-1.5 sm:max-w-xs">
+                <label
+                  htmlFor="audit-outcome-filter"
+                  className="text-xs font-medium text-slate-500"
+                >
+                  Outcome
+                </label>
 
-                  <select
-                    id="audit-category-filter"
-                    value={categoryFilter}
-                    onChange={(event) =>
-                      setCategoryFilter(event.target.value as CategoryFilter)
-                    }
-                    className="h-10 w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors focus-visible:border-teal-600 focus-visible:ring-1 focus-visible:ring-teal-600"
-                  >
-                    <option value="All">All categories</option>
-
-                    {categories.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="audit-outcome-filter"
-                    className="text-xs font-medium text-slate-500"
-                  >
-                    Outcome
-                  </label>
-
-                  <select
-                    id="audit-outcome-filter"
-                    value={outcomeFilter}
-                    onChange={(event) =>
-                      setOutcomeFilter(event.target.value as OutcomeFilter)
-                    }
-                    className="h-10 w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors focus-visible:border-teal-600 focus-visible:ring-1 focus-visible:ring-teal-600"
-                  >
-                    <option value="All">All outcomes</option>
-                    <option value="Success">Success</option>
-                    <option value="Warning">Warning</option>
-                    <option value="Failed">Failed</option>
-                  </select>
-                </div>
+                <select
+                  id="audit-outcome-filter"
+                  value={outcomeFilter}
+                  onChange={(event) =>
+                    setOutcomeFilter(event.target.value as OutcomeFilter)
+                  }
+                  className="h-10 w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors focus-visible:border-teal-600 focus-visible:ring-1 focus-visible:ring-teal-600"
+                >
+                  <option value="All">All outcomes</option>
+                  <option value="Success">Success</option>
+                  <option value="Warning">Warning</option>
+                  <option value="Failed">Failed</option>
+                </select>
               </div>
 
               {hasActiveFilters && (
@@ -253,9 +209,9 @@ export default function AuditLogsView() {
           <FileSearch size={14} className="mt-0.5 shrink-0" />
 
           <span>
-            The audit log table and details dialog are read-only. Actual audit
-            logging, access controls, and persistent storage will be handled by
-            the backend when connected.
+            These sample records are read-only. In the connected application,
+            the backend should record important changes when the corresponding
+            operations succeed.
           </span>
         </p>
       </section>

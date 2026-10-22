@@ -1,10 +1,3 @@
-export type AuditCategory =
-  | "Authentication"
-  | "User Management"
-  | "Integration"
-  | "Data Quality"
-  | "System";
-
 export type AuditOutcome = "Success" | "Warning" | "Failed";
 
 export interface AuditLog {
@@ -13,10 +6,9 @@ export interface AuditLog {
   actor: string;
   role: string;
   action: string;
-  category: AuditCategory;
+  category: string;
   outcome: AuditOutcome;
   resource: string;
   resourceId: string;
-  ipAddress: string;
   details: string;
 }
