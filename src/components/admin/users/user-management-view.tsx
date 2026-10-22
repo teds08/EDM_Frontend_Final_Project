@@ -105,11 +105,9 @@ export function UserManagementView() {
         const records = Array.isArray(response.data) ? response.data : [];
         const mappedUsers = records.map(mapBackendUser);
 
+        // Use the field names returned by the backend.
         const matchingTotal =
-          response.pagination?.totalItems ??
-          response.pagination?.total ??
-          response.total ??
-          mappedUsers.length;
+          response.pagination?.totalRecords ?? mappedUsers.length;
 
         const calculatedPages = Math.max(
           1,
@@ -118,15 +116,18 @@ export function UserManagementView() {
 
         setUsers(mappedUsers);
         setTotalCount(matchingTotal);
-        setTotalPages(response.pagination?.totalPages ?? calculatedPages);
+        setTotalPages(
+          Math.max(1, response.pagination?.totalPages ?? calculatedPages),
+        );
 
+        // Read aggregate statistics from response.stats.
         setStats({
-          total: response.total ?? matchingTotal,
+          total: response.stats?.totalUsers ?? matchingTotal,
           active:
-            response.active ??
+            response.stats?.activeUsers ??
             mappedUsers.filter((user) => user.status === "Active").length,
           inactive:
-            response.inactive ??
+            response.stats?.inactiveUsers ??
             mappedUsers.filter((user) => user.status === "Inactive").length,
         });
       } catch (error) {
@@ -147,7 +148,7 @@ export function UserManagementView() {
       }
     };
 
-    // Keep search from sending a request on every individual keystroke.
+    // Debounce requests while the user types in the search field.
     const timeoutId = window.setTimeout(() => {
       void loadUsers();
     }, 250);
@@ -239,8 +240,7 @@ export function UserManagementView() {
 
       return null;
     } catch (error) {
-      // An edit may have succeeded even if a separate status update failed.
-      // Refresh the list so it reflects any changes already saved.
+      // Refresh if an earlier operation succeeded before a later one failed.
       if (serverChanged) {
         setReloadKey((current) => current + 1);
       }
