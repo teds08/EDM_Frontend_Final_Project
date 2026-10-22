@@ -63,6 +63,48 @@ interface UserTableProps {
   onToggleStatus: (user: AdminUser) => Promise<string | null>;
 }
 
+function formatLastActivity(lastActivityAt?: string | null) {
+  const value = String(lastActivityAt ?? "").trim();
+
+  // Handle null, empty values, and literal placeholder strings.
+  if (
+    !value ||
+    ["null", "undefined", "never", "n/a"].includes(value.toLowerCase())
+  ) {
+    return {
+      text: "No activity recorded",
+      title: undefined,
+      hasActivity: false,
+    };
+  }
+
+  const date = new Date(value);
+
+  // Handle any unexpected or invalid timestamp gracefully.
+  if (Number.isNaN(date.getTime())) {
+    return {
+      text: "Not available",
+      title: undefined,
+      hasActivity: false,
+    };
+  }
+
+  return {
+    text: new Intl.DateTimeFormat("en-PH", {
+      timeZone: "Asia/Manila",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(date),
+    title: date.toLocaleString("en-PH", {
+      timeZone: "Asia/Manila",
+    }),
+    hasActivity: true,
+  };
+}
+
 export function UserTable({
   users,
   search,
@@ -101,13 +143,11 @@ export function UserTable({
       }
 
       setPendingUser(null);
+    } catch {
+      setStatusError("Unable to update the account status. Please try again.");
     } finally {
       setIsUpdatingStatus(false);
     }
-  }
-
-  function resetFilters() {
-    onResetFilters();
   }
 
   return (
@@ -179,7 +219,7 @@ export function UserTable({
                   <TableHead className="min-w-[240px]">User</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="min-w-[140px]">Last Activity</TableHead>
+                  <TableHead className="min-w-[200px]">Last Activity</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -207,105 +247,118 @@ export function UserTable({
                   </TableRow>
                 )}
 
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-sm font-semibold text-teal-800">
-                          {user.firstName.charAt(0)}
-                          {user.lastName.charAt(0)}
+                {users.map((user) => {
+                  const activity = formatLastActivity(user.lastActivityAt);
+
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-sm font-semibold text-teal-800">
+                            {user.firstName.charAt(0)}
+                            {user.lastName.charAt(0)}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-900">
+                              {user.firstName} {user.lastName}
+                            </p>
+
+                            <p className="truncate text-sm text-slate-500">
+                              {user.email}
+                            </p>
+
+                            <p className="text-xs text-slate-400">
+                              ID: {user.id}
+                            </p>
+                          </div>
                         </div>
+                      </TableCell>
 
-                        <div className="min-w-0">
-                          <p className="font-medium text-slate-900">
-                            {user.firstName} {user.lastName}
-                          </p>
-
-                          <p className="truncate text-sm text-slate-500">
-                            {user.email}
-                          </p>
-
-                          <p className="text-xs text-slate-400">
-                            ID: {user.id}
-                          </p>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm text-slate-700">
+                          <ShieldCheck className="h-4 w-4 shrink-0 text-slate-400" />
+                          {user.role}
                         </div>
-                      </div>
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-sm text-slate-700">
-                        <ShieldCheck className="h-4 w-4 shrink-0 text-slate-400" />
-                        {user.role}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={
-                          user.status === "Active"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-slate-200 bg-slate-100 text-slate-600"
-                        }
-                      >
-                        <span
-                          className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={
                             user.status === "Active"
-                              ? "bg-emerald-500"
-                              : "bg-slate-400"
-                          }`}
-                        />
-
-                        {user.status}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell className="text-sm text-slate-500">
-                      {user.lastActivity}
-                    </TableCell>
-
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          aria-label={`Actions for ${user.firstName} ${user.lastName}`}
-                          className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-slate-100 text-slate-600"
+                          }
                         >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
+                          <span
+                            className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
+                              user.status === "Active"
+                                ? "bg-emerald-500"
+                                : "bg-slate-400"
+                            }`}
+                          />
 
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={() => onEdit(user)}
-                          >
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit user
-                          </DropdownMenuItem>
+                          {user.status}
+                        </Badge>
+                      </TableCell>
 
-                          <DropdownMenuItem
-                            className="cursor-pointer"
-                            onClick={() => {
-                              setStatusError("");
-                              setPendingUser(user);
-                            }}
+                      <TableCell>
+                        <span
+                          title={activity.title}
+                          className={`whitespace-nowrap text-sm ${
+                            activity.hasActivity
+                              ? "text-slate-600"
+                              : "text-slate-400 italic"
+                          }`}
+                        >
+                          {activity.text}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            aria-label={`Actions for ${user.firstName} ${user.lastName}`}
+                            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
                           >
-                            {user.status === "Active" ? (
-                              <>
-                                <UserRoundX className="mr-2 h-4 w-4" />
-                                Deactivate account
-                              </>
-                            ) : (
-                              <>
-                                <UserRound className="mr-2 h-4 w-4" />
-                                Activate account
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={() => onEdit(user)}
+                            >
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit user
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem
+                              className="cursor-pointer"
+                              onClick={() => {
+                                setStatusError("");
+                                setPendingUser(user);
+                              }}
+                            >
+                              {user.status === "Active" ? (
+                                <>
+                                  <UserRoundX className="mr-2 h-4 w-4" />
+                                  Deactivate account
+                                </>
+                              ) : (
+                                <>
+                                  <UserRound className="mr-2 h-4 w-4" />
+                                  Activate account
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
@@ -333,7 +386,7 @@ export function UserTable({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={resetFilters}
+                onClick={onResetFilters}
                 className="cursor-pointer"
               >
                 <ArrowDownUp className="mr-2 h-4 w-4" />

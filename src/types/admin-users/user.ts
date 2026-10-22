@@ -17,8 +17,11 @@ export interface AdminUser {
   email: string;
   role: UserRole;
   status: UserStatus;
-  lastActivity: string;
+  lastActivityAt?: string | null;
   createdAt: string;
+
+  /** Optional legacy field for existing frontend components. */
+  lastActivity?: string;
 }
 
 export interface BackendAdminUser {
@@ -26,11 +29,11 @@ export interface BackendAdminUser {
   firstName: string;
   lastName: string;
   email: string;
-  role: string;
-  status: string;
-  lastActivity?: string | null;
+  role: ApiUserRole;
+  status: ApiUserStatus;
+  lastActivityAt: string | null;
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
 }
 
 export interface UserFormValues {
@@ -43,18 +46,19 @@ export interface UserFormValues {
 }
 
 export interface UserListResponse {
-  success?: boolean;
-  message?: string;
+  success: boolean;
+  message: string;
   data: BackendAdminUser[];
-  total?: number;
-  active?: number;
-  inactive?: number;
+  stats?: {
+    totalUsers: number;
+    activeUsers: number;
+    inactiveUsers: number;
+  };
   pagination?: {
-    page?: number;
-    limit?: number;
-    total?: number;
-    totalItems?: number;
-    totalPages?: number;
+    page: number;
+    limit: number;
+    totalRecords: number;
+    totalPages: number;
   };
 }
 

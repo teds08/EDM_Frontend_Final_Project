@@ -68,7 +68,7 @@ export function mapBackendUser(user: BackendAdminUser): AdminUser {
     email: user.email,
     role: fromApiUserRole(user.role),
     status: user.status.toUpperCase() === "ACTIVE" ? "Active" : "Inactive",
-    lastActivity: formatLastActivity(user.lastActivity),
+    lastActivityAt: formatLastActivity(user.lastActivityAt),
     createdAt: user.createdAt,
   };
 }
