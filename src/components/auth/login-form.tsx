@@ -6,20 +6,72 @@ import {
   Activity,
   AlertCircle,
   ArrowRight,
-  ChevronDown,
   Eye,
   EyeOff,
   LockKeyhole,
+  LoaderCircle,
   Mail,
   ShieldCheck,
-  UserRoundCheck,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { demoUsers } from "@/data/auth/demo-users";
+import { apiRequest, AUTH_ROLE_KEY, AUTH_TOKEN_KEY } from "@/lib/api";
+
+interface AuthenticatedUser {
+  role?: string;
+  roleName?: string;
+  roleCode?: string;
+}
+
+interface LoginPayload {
+  token?: string;
+  user?: AuthenticatedUser;
+  role?: string;
+  roleName?: string;
+  roleCode?: string;
+}
+
+interface LoginResponse {
+  success?: boolean;
+  message?: string;
+  token?: string;
+  role?: string;
+  roleName?: string;
+  roleCode?: string;
+  user?: AuthenticatedUser;
+  data?: LoginPayload;
+}
+
+function getDashboardPath(roleValue: unknown): string | null {
+  const role = String(roleValue ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+
+  switch (role) {
+    case "ADMIN":
+    case "ADMINISTRATOR":
+      return "/admin/dashboard";
+
+    case "REGISTRATION":
+    case "REGISTRATION_STAFF":
+      return "/registration/dashboard";
+
+    case "LABORATORY":
+    case "LABORATORY_STAFF":
+      return "/laboratory/dashboard";
+
+    case "BILLING":
+    case "BILLING_STAFF":
+      return "/billing/dashboard";
+
+    default:
+      return null;
+  }
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -28,40 +80,72 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [demoRolesOpen, setDemoRolesOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setIsSubmitting(true);
 
-    const matchedUser = demoUsers.find(
-      (user) =>
-        user.email.toLowerCase() === email.trim().toLowerCase() &&
-        user.password === password,
-    );
+    try {
+      const response = await apiRequest<LoginResponse>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
 
-    if (!matchedUser) {
+      const data = response.data ?? response;
+      const user = data.user ?? response.user;
+
+      const token = data.token ?? response.token;
+
+      const role =
+        user?.role ??
+        user?.roleName ??
+        user?.roleCode ??
+        data.role ??
+        data.roleName ??
+        data.roleCode ??
+        response.role ??
+        response.roleName ??
+        response.roleCode;
+
+      if (!token) {
+        throw new Error(
+          "The backend login response did not include an access token.",
+        );
+      }
+
+      const dashboardPath = getDashboardPath(role);
+
+      if (!dashboardPath) {
+        throw new Error(
+          "Your account was authenticated, but its assigned role is not recognized by this frontend.",
+        );
+      }
+
+      // Store the token and role for the protected dashboard layout.
+      window.sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+      window.sessionStorage.setItem(AUTH_ROLE_KEY, String(role).trim());
+
+      router.replace(dashboardPath);
+    } catch (submissionError) {
       setError(
-        "The email or password is incorrect. Check your credentials or select a demo account.",
+        submissionError instanceof Error
+          ? submissionError.message
+          : "Unable to sign in. Please try again.",
       );
-      return;
+    } finally {
+      setIsSubmitting(false);
     }
-
-    router.push(matchedUser.dashboardPath);
-  }
-
-  function selectDemoAccount(userEmail: string, userPassword: string) {
-    setEmail(userEmail);
-    setPassword(userPassword);
-    setError("");
-    setDemoRolesOpen(false);
   }
 
   return (
     <div className="w-full">
       {/* Centered Branding */}
       <div className="mb-6 text-center">
-        {/* Brand Icon */}
         <div className="relative mx-auto mb-4 flex size-[76px] items-center justify-center">
           <div className="absolute inset-2 rotate-6 rounded-[23px] bg-teal-100 transition-transform duration-300 hover:rotate-12" />
 
@@ -80,7 +164,6 @@ export function LoginForm() {
           </span>
         </div>
 
-        {/* Portal Badge */}
         <div className="mb-3 flex justify-center">
           <Badge
             variant="outline"
@@ -91,7 +174,6 @@ export function LoginForm() {
           </Badge>
         </div>
 
-        {/* Brand Slogan */}
         <p className="text-sm font-semibold tracking-tight text-teal-800">
           Connecting Healthcare Data.
           <span className="block text-teal-700">Bridging Better Care.</span>
@@ -133,6 +215,7 @@ export function LoginForm() {
                 setEmail(event.target.value);
                 setError("");
               }}
+              disabled={isSubmitting}
               className="h-11 rounded-xl border-slate-200 bg-slate-50/60 pl-10 shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-teal-600 focus-visible:ring-offset-0"
               required
             />
@@ -167,6 +250,7 @@ export function LoginForm() {
                 setPassword(event.target.value);
                 setError("");
               }}
+              disabled={isSubmitting}
               className="h-11 rounded-xl border-slate-200 bg-slate-50/60 pl-10 pr-12 shadow-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:bg-white focus-visible:ring-1 focus-visible:ring-teal-600 focus-visible:ring-offset-0"
               required
             />
@@ -176,7 +260,8 @@ export function LoginForm() {
               onClick={() => setShowPassword((previous) => !previous)}
               aria-label={showPassword ? "Hide password" : "Show password"}
               aria-pressed={showPassword}
-              className="absolute right-3 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+              disabled={isSubmitting}
+              className="absolute right-3 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
@@ -195,13 +280,23 @@ export function LoginForm() {
 
         <Button
           type="submit"
-          className="group h-11 w-full cursor-pointer rounded-xl bg-teal-700 font-medium text-white shadow-sm transition-all hover:bg-teal-800"
+          disabled={isSubmitting}
+          className="group h-11 w-full cursor-pointer rounded-xl bg-teal-700 font-medium text-white shadow-sm transition-all hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Sign in to CareBridge
-          <ArrowRight
-            size={17}
-            className="ml-2 transition-transform group-hover:translate-x-0.5"
-          />
+          {isSubmitting ? (
+            <>
+              <LoaderCircle size={17} className="mr-2 animate-spin" />
+              Signing in...
+            </>
+          ) : (
+            <>
+              Sign in to CareBridge
+              <ArrowRight
+                size={17}
+                className="ml-2 transition-transform group-hover:translate-x-0.5"
+              />
+            </>
+          )}
         </Button>
 
         <p className="text-center text-xs leading-5 text-slate-400">
@@ -209,80 +304,12 @@ export function LoginForm() {
         </p>
       </form>
 
-      {/* Expandable Demo Roles */}
-      <div className="mt-5">
-        <button
-          type="button"
-          aria-expanded={demoRolesOpen}
-          aria-controls="demo-roles-list"
-          onClick={() => setDemoRolesOpen((previous) => !previous)}
-          className="group flex w-full cursor-pointer items-center gap-3 rounded-lg px-1 py-2 text-left transition-colors hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2"
-        >
-          <span className="h-px flex-1 bg-slate-200 transition-colors group-hover:bg-teal-300" />
-
-          <span className="inline-flex shrink-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 transition-colors group-hover:text-teal-800">
-            <UserRoundCheck size={14} />
-            Explore demo roles
-            <ChevronDown
-              size={14}
-              className={`transition-transform duration-200 ${
-                demoRolesOpen ? "rotate-180" : ""
-              }`}
-            />
-          </span>
-
-          <span className="h-px flex-1 bg-slate-200 transition-colors group-hover:bg-teal-300" />
-        </button>
-
-        {demoRolesOpen && (
-          <div
-            id="demo-roles-list"
-            className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2"
-          >
-            {demoUsers.map((user) => (
-              <button
-                key={user.role}
-                type="button"
-                onClick={() => selectDemoAccount(user.email, user.password)}
-                className="group flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition-all duration-200 hover:border-teal-300 hover:bg-teal-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
-              >
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 transition-colors group-hover:bg-teal-100 group-hover:text-teal-800">
-                  <UserRoundCheck size={15} />
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-semibold text-slate-800">
-                    {user.roleLabel}
-                  </span>
-
-                  <span className="mt-0.5 block truncate text-[10px] text-slate-500">
-                    {user.email}
-                  </span>
-                </div>
-
-                <ArrowRight
-                  size={14}
-                  className="shrink-0 text-slate-300 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700"
-                />
-              </button>
-            ))}
-          </div>
-        )}
-
-        <p className="mt-2 text-center text-[11px] leading-4 text-slate-400">
-          {demoRolesOpen
-            ? "Select a role to fill in its demo credentials."
-            : "Optional · Click to view available demo accounts."}
-        </p>
-      </div>
-
-      {/* Compact Demo Credentials Notice */}
-      <div className="mt-3 flex items-center justify-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
+      {/* Backend Authentication Notice */}
+      <div className="mt-5 flex items-center justify-center gap-2 rounded-lg bg-slate-50 px-3 py-2">
         <LockKeyhole size={13} className="shrink-0 text-slate-400" />
 
-        <p className="text-[11px] leading-4 text-slate-500">
-          Demo password:{" "}
-          <span className="font-semibold text-slate-700">Demo123!</span>
+        <p className="text-center text-[11px] leading-4 text-slate-500">
+          Your credentials are verified by the CareBridge server.
         </p>
       </div>
 

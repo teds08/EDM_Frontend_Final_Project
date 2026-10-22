@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, ShieldCheck } from "lucide-react";
 
+import { AUTH_ROLE_KEY, AUTH_TOKEN_KEY } from "@/lib/api";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +24,10 @@ export function AdminHeader() {
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   function handleLogout() {
+    // Clear the saved browser authentication data.
+    window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    window.sessionStorage.removeItem(AUTH_ROLE_KEY);
+
     setLogoutOpen(false);
     router.replace("/login");
   }
@@ -42,9 +48,9 @@ export function AdminHeader() {
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <Badge
             variant="outline"
-            className="hidden border-amber-200 bg-amber-50 text-amber-800 sm:inline-flex"
+            className="hidden border-teal-200 bg-teal-50 text-teal-800 sm:inline-flex"
           >
-            Demo Data
+            Live API
           </Badge>
 
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />
@@ -73,7 +79,7 @@ export function AdminHeader() {
             size="sm"
             aria-label="Log out"
             onClick={() => setLogoutOpen(true)}
-            className="h-9 gap-2 border-slate-200 text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+            className="h-9 cursor-pointer gap-2 border-slate-200 text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
           >
             <LogOut size={16} />
             <span className="hidden sm:inline">Logout</span>
@@ -101,19 +107,20 @@ export function AdminHeader() {
 
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
             <p className="text-xs leading-5 text-amber-800">
-              This is a demonstration session. No real backend session or
-              authentication token is being revoked.
+              Logging out clears this browser session&apos;s access token. The
+              backend must independently validate tokens and enforce access
+              permissions.
             </p>
           </div>
 
           <AlertDialogFooter className="mt-6 flex-row gap-2 sm:justify-end">
-            <AlertDialogCancel className="mt-0 border-slate-200">
+            <AlertDialogCancel className="mt-0 cursor-pointer border-slate-200">
               Cancel
             </AlertDialogCancel>
 
             <AlertDialogAction
               onClick={handleLogout}
-              className="bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-600"
+              className="cursor-pointer bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-600"
             >
               <LogOut size={15} className="mr-2" />
               Yes, log out

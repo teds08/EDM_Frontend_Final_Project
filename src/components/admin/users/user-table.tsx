@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   ArrowDownUp,
+  ChevronLeft,
+  ChevronRight,
   MoreHorizontal,
   Pencil,
   Search,
@@ -11,7 +13,7 @@ import {
   UserRoundX,
 } from "lucide-react";
 
-import type { AdminUser } from "@/types/admin-users/user";
+import type { AdminUser, UserRole, UserStatus } from "@/types/admin-users/user";
 import { userRoles } from "@/data/admin-users/dummy-data";
 
 import { Badge } from "@/components/ui/badge";
@@ -45,46 +47,67 @@ import {
 
 interface UserTableProps {
   users: AdminUser[];
+  search: string;
+  roleFilter: UserRole | "All roles";
+  statusFilter: UserStatus | "All statuses";
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  isLoading: boolean;
+  onSearchChange: (value: string) => void;
+  onRoleFilterChange: (value: UserRole | "All roles") => void;
+  onStatusFilterChange: (value: UserStatus | "All statuses") => void;
+  onPageChange: (page: number) => void;
+  onResetFilters: () => void;
   onEdit: (user: AdminUser) => void;
-  onToggleStatus: (user: AdminUser) => void;
+  onToggleStatus: (user: AdminUser) => Promise<string | null>;
 }
 
-export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState("All roles");
-  const [statusFilter, setStatusFilter] = useState("All statuses");
+export function UserTable({
+  users,
+  search,
+  roleFilter,
+  statusFilter,
+  page,
+  totalPages,
+  totalCount,
+  isLoading,
+  onSearchChange,
+  onRoleFilterChange,
+  onStatusFilterChange,
+  onPageChange,
+  onResetFilters,
+  onEdit,
+  onToggleStatus,
+}: UserTableProps) {
   const [pendingUser, setPendingUser] = useState<AdminUser | null>(null);
+  const [statusError, setStatusError] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  const filteredUsers = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  async function confirmStatusChange() {
+    if (!pendingUser || isUpdatingStatus) {
+      return;
+    }
 
-    return users.filter((user) => {
-      const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
+    setIsUpdatingStatus(true);
+    setStatusError("");
 
-      const matchesSearch =
-        fullName.includes(term) || user.email.toLowerCase().includes(term);
+    try {
+      const error = await onToggleStatus(pendingUser);
 
-      const matchesRole =
-        roleFilter === "All roles" || user.role === roleFilter;
+      if (error) {
+        setStatusError(error);
+        return;
+      }
 
-      const matchesStatus =
-        statusFilter === "All statuses" || user.status === statusFilter;
-
-      return matchesSearch && matchesRole && matchesStatus;
-    });
-  }, [users, search, roleFilter, statusFilter]);
-
-  function confirmStatusChange() {
-    if (!pendingUser) return;
-
-    onToggleStatus(pendingUser);
-    setPendingUser(null);
+      setPendingUser(null);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   }
 
   function resetFilters() {
-    setSearch("");
-    setRoleFilter("All roles");
-    setStatusFilter("All statuses");
+    onResetFilters();
   }
 
   return (
@@ -101,14 +124,13 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
             </p>
           </div>
 
-          {/* Search and Filters */}
           <div className="grid gap-3 md:grid-cols-[minmax(200px,1fr)_190px_170px]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
               <Input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search name or email..."
                 className="pl-9"
                 aria-label="Search users by name or email"
@@ -117,9 +139,11 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
 
             <select
               value={roleFilter}
-              onChange={(event) => setRoleFilter(event.target.value)}
+              onChange={(event) =>
+                onRoleFilterChange(event.target.value as UserRole | "All roles")
+              }
               aria-label="Filter by role"
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+              className="h-10 cursor-pointer rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
             >
               <option value="All roles">All roles</option>
 
@@ -132,9 +156,13 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
 
             <select
               value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
+              onChange={(event) =>
+                onStatusFilterChange(
+                  event.target.value as UserStatus | "All statuses",
+                )
+              }
               aria-label="Filter by account status"
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+              className="h-10 cursor-pointer rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
             >
               <option value="All statuses">All statuses</option>
               <option value="Active">Active</option>
@@ -157,9 +185,30 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
               </TableHeader>
 
               <TableBody>
-                {filteredUsers.map((user) => (
+                {isLoading && users.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="h-32 text-center text-sm text-slate-500"
+                    >
+                      Loading users...
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {!isLoading && users.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={5}
+                      className="h-32 text-center text-sm text-slate-500"
+                    >
+                      No users match your search or filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {users.map((user) => (
                   <TableRow key={user.id}>
-                    {/* User Information */}
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-sm font-semibold text-teal-800">
@@ -183,7 +232,6 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
                       </div>
                     </TableCell>
 
-                    {/* User Role */}
                     <TableCell>
                       <div className="flex items-center gap-2 text-sm text-slate-700">
                         <ShieldCheck className="h-4 w-4 shrink-0 text-slate-400" />
@@ -191,7 +239,6 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
                       </div>
                     </TableCell>
 
-                    {/* Account Status */}
                     <TableCell>
                       <Badge
                         variant="outline"
@@ -213,12 +260,10 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
                       </Badge>
                     </TableCell>
 
-                    {/* Last Activity */}
                     <TableCell className="text-sm text-slate-500">
                       {user.lastActivity}
                     </TableCell>
 
-                    {/* Actions */}
                     <TableCell className="text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger
@@ -239,7 +284,10 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
 
                           <DropdownMenuItem
                             className="cursor-pointer"
-                            onClick={() => setPendingUser(user)}
+                            onClick={() => {
+                              setStatusError("");
+                              setPendingUser(user);
+                            }}
                           >
                             {user.status === "Active" ? (
                               <>
@@ -258,51 +306,77 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
                     </TableCell>
                   </TableRow>
                 ))}
-
-                {filteredUsers.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={5}
-                      className="h-32 text-center text-sm text-slate-500"
-                    >
-                      No users match your search or filters.
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
           </div>
 
-          {/* Table Footer */}
-          <div className="flex flex-col gap-2 border-t border-slate-100 px-5 py-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              Showing{" "}
-              <span className="font-medium text-slate-900">
-                {filteredUsers.length}
-              </span>{" "}
-              of{" "}
-              <span className="font-medium text-slate-900">{users.length}</span>{" "}
-              users
-            </p>
+          <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p>
+                Showing{" "}
+                <span className="font-medium text-slate-900">
+                  {users.length}
+                </span>{" "}
+                of{" "}
+                <span className="font-medium text-slate-900">{totalCount}</span>{" "}
+                users
+              </p>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="cursor-pointer self-start"
-              onClick={resetFilters}
-            >
-              <ArrowDownUp className="mr-2 h-4 w-4" />
-              Reset filters
-            </Button>
+              {isLoading && users.length > 0 && (
+                <p className="mt-1 text-xs text-teal-700">
+                  Refreshing user directory...
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetFilters}
+                className="cursor-pointer"
+              >
+                <ArrowDownUp className="mr-2 h-4 w-4" />
+                Reset filters
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPageChange(page - 1)}
+                disabled={page <= 1 || isLoading}
+                className="cursor-pointer"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <span className="whitespace-nowrap text-xs tabular-nums">
+                Page {page} of {totalPages}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onPageChange(page + 1)}
+                disabled={page >= totalPages || isLoading}
+                className="cursor-pointer"
+                aria-label="Next page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Activate/Deactivate Confirmation */}
       <AlertDialog
         open={pendingUser !== null}
         onOpenChange={(open) => {
-          if (!open) setPendingUser(null);
+          if (!open && !isUpdatingStatus) {
+            setPendingUser(null);
+            setStatusError("");
+          }
         }}
       >
         <AlertDialogContent>
@@ -317,19 +391,37 @@ export function UserTable({ users, onEdit, onToggleStatus }: UserTableProps) {
               {pendingUser
                 ? `You are about to ${
                     pendingUser.status === "Active" ? "deactivate" : "activate"
-                  } ${pendingUser.firstName} ${pendingUser.lastName}'s demo account. This change only affects the current page state.`
+                  } ${pendingUser.firstName} ${pendingUser.lastName}'s account. This change will be submitted to the backend.`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
+          {statusError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+            >
+              {statusError}
+            </div>
+          )}
+
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              disabled={isUpdatingStatus}
+              className="cursor-pointer"
+            >
+              Cancel
+            </AlertDialogCancel>
 
             <AlertDialogAction
-              onClick={confirmStatusChange}
-              className="bg-teal-700 text-white hover:bg-teal-800"
+              disabled={isUpdatingStatus}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmStatusChange();
+              }}
+              className="cursor-pointer bg-teal-700 text-white hover:bg-teal-800"
             >
-              Confirm
+              {isUpdatingStatus ? "Saving..." : "Confirm"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

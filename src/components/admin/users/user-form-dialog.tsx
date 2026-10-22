@@ -1,9 +1,22 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { AlertCircle, ShieldCheck, UserRoundPlus, X } from "lucide-react";
+import {
+  AlertCircle,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  ShieldCheck,
+  UserRoundPlus,
+  X,
+} from "lucide-react";
 
-import type { AdminUser, UserRole, UserStatus } from "@/types/admin-users/user";
+import type {
+  AdminUser,
+  UserFormValues,
+  UserRole,
+  UserStatus,
+} from "@/types/admin-users/user";
 import { userRoles } from "@/data/admin-users/dummy-data";
 
 import { Button } from "@/components/ui/button";
@@ -21,13 +34,14 @@ interface UserFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user?: AdminUser | null;
-  onSave: (user: AdminUser) => string | null;
+  onSave: (values: UserFormValues) => Promise<string | null>;
 }
 
 const emptyForm = {
   firstName: "",
   lastName: "",
   email: "",
+  password: "",
   role: "Registration Staff" as UserRole,
   status: "Active" as UserStatus,
 };
@@ -50,6 +64,7 @@ export function UserFormDialog({
           firstName: user.firstName,
           lastName: user.lastName,
           email: user.email,
+          password: "",
           role: user.role,
           status: user.status,
         }
@@ -57,8 +72,10 @@ export function UserFormDialog({
   );
 
   const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
@@ -76,23 +93,38 @@ export function UserFormDialog({
       return;
     }
 
-    const saveError = onSave({
-      id: user?.id ?? `USR-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-      firstName,
-      lastName,
-      email,
-      role: form.role,
-      status: form.status,
-      lastActivity: user?.lastActivity ?? "Never",
-      createdAt: user?.createdAt ?? new Date().toISOString().slice(0, 10),
-    });
-
-    if (saveError) {
-      setError(saveError);
+    if (!user && !form.password) {
+      setError("Please enter a password for the new staff account.");
       return;
     }
 
-    onOpenChange(false);
+    setIsSaving(true);
+
+    try {
+      const saveError = await onSave({
+        firstName,
+        lastName,
+        email,
+        role: form.role,
+        status: form.status,
+        ...(!user ? { password: form.password } : {}),
+      });
+
+      if (saveError) {
+        setError(saveError);
+        return;
+      }
+
+      onOpenChange(false);
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to save the staff account.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function updateField<K extends keyof typeof emptyForm>(
@@ -108,10 +140,17 @@ export function UserFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-0 overflow-hidden border-slate-200 bg-white p-0 shadow-xl sm:max-w-xl">
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!isSaving) {
+          onOpenChange(nextOpen);
+        }
+      }}
+    >
+      <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden border-slate-200 bg-white p-0 shadow-xl sm:max-w-xl">
         {/* Header */}
-        <DialogHeader className="border-b border-slate-100 bg-slate-50/70 px-6 py-5 text-left sm:px-7">
+        <DialogHeader className="shrink-0 border-b border-slate-100 bg-slate-50/70 px-6 py-5 text-left sm:px-7">
           <div className="flex items-start gap-4 pr-7">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-teal-100 bg-teal-50 text-teal-700">
               {user ? <ShieldCheck size={21} /> : <UserRoundPlus size={21} />}
@@ -137,8 +176,13 @@ export function UserFormDialog({
           </div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-6 px-6 py-6 sm:px-7">
+        {/* Form */}
+        <form
+          onSubmit={handleSubmit}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          {/* Scrollable Form Content */}
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 py-6 sm:px-7">
             {/* Personal Information */}
             <section className="space-y-4">
               <div>
@@ -169,6 +213,7 @@ export function UserFormDialog({
                     }
                     placeholder="e.g. Maria"
                     className={fieldClassName}
+                    disabled={isSaving}
                     required
                   />
                 </div>
@@ -190,6 +235,7 @@ export function UserFormDialog({
                     }
                     placeholder="e.g. Santos"
                     className={fieldClassName}
+                    disabled={isSaving}
                     required
                   />
                 </div>
@@ -211,6 +257,7 @@ export function UserFormDialog({
                   onChange={(event) => updateField("email", event.target.value)}
                   placeholder="name@carebridge.demo"
                   className={fieldClassName}
+                  disabled={isSaving}
                   required
                 />
 
@@ -218,6 +265,50 @@ export function UserFormDialog({
                   Each staff account must have a unique email address.
                 </p>
               </div>
+
+              {!user && (
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="password"
+                    className="text-sm font-medium text-slate-700"
+                  >
+                    Initial Password <span className="text-rose-600">*</span>
+                  </Label>
+
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      autoComplete="new-password"
+                      value={form.password}
+                      onChange={(event) =>
+                        updateField("password", event.target.value)
+                      }
+                      placeholder="Enter an initial password"
+                      className={`${fieldClassName} pr-12`}
+                      disabled={isSaving}
+                      required
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((previous) => !previous)}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      aria-pressed={showPassword}
+                      disabled={isSaving}
+                      className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+
+                  <p className="text-xs leading-5 text-slate-500">
+                    Use the eye icon to show or hide the initial password.
+                  </p>
+                </div>
+              )}
             </section>
 
             {/* Access Settings */}
@@ -233,7 +324,11 @@ export function UserFormDialog({
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div
+                className={`grid gap-4 ${
+                  user ? "sm:grid-cols-2" : "sm:grid-cols-1"
+                }`}
+              >
                 <div className="space-y-2">
                   <Label
                     htmlFor="role"
@@ -249,6 +344,7 @@ export function UserFormDialog({
                       updateField("role", event.target.value as UserRole)
                     }
                     className={selectClassName}
+                    disabled={isSaving}
                   >
                     {userRoles.map((role) => (
                       <option key={role} value={role}>
@@ -258,26 +354,34 @@ export function UserFormDialog({
                   </select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="status"
-                    className="text-sm font-medium text-slate-700"
-                  >
-                    Account Status
-                  </Label>
+                {user ? (
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="status"
+                      className="text-sm font-medium text-slate-700"
+                    >
+                      Account Status
+                    </Label>
 
-                  <select
-                    id="status"
-                    value={form.status}
-                    onChange={(event) =>
-                      updateField("status", event.target.value as UserStatus)
-                    }
-                    className={selectClassName}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </div>
+                    <select
+                      id="status"
+                      value={form.status}
+                      onChange={(event) =>
+                        updateField("status", event.target.value as UserStatus)
+                      }
+                      className={selectClassName}
+                      disabled={isSaving}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                ) : (
+                  <p className="text-xs leading-5 text-slate-500">
+                    New accounts are created as active. You can change the
+                    account status after creation.
+                  </p>
+                )}
               </div>
             </section>
 
@@ -293,10 +397,8 @@ export function UserFormDialog({
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-teal-800/80">
-                  Staff accounts are provisioned through User Management. Public
-                  self-registration is disabled. In this demo, changes are held
-                  in frontend state and are not saved to a database or
-                  authentication service.
+                  Account changes are submitted to the CareBridge backend.
+                  Public self-registration remains disabled.
                 </p>
               </div>
             </div>
@@ -308,18 +410,18 @@ export function UserFormDialog({
                 className="flex items-start gap-2.5 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm text-rose-700"
               >
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
-
                 <p>{error}</p>
               </div>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/50 px-6 py-4 sm:flex-row sm:justify-end sm:px-7">
+          {/* Fixed Footer */}
+          <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/50 px-6 py-4 sm:flex-row sm:justify-end sm:px-7">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={isSaving}
               className="h-10 cursor-pointer border-slate-200 bg-white px-4 text-slate-700 shadow-none hover:bg-slate-100"
             >
               <X className="mr-2 size-4" />
@@ -328,9 +430,19 @@ export function UserFormDialog({
 
             <Button
               type="submit"
-              className="h-10 cursor-pointer bg-teal-700 px-4 font-medium text-white shadow-none hover:bg-teal-800"
+              disabled={isSaving}
+              className="h-10 cursor-pointer bg-teal-700 px-4 font-medium text-white shadow-none hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {user ? "Save Changes" : "Create Staff Account"}
+              {isSaving ? (
+                <>
+                  <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  Saving...
+                </>
+              ) : user ? (
+                "Save Changes"
+              ) : (
+                "Create Staff Account"
+              )}
             </Button>
           </div>
         </form>
