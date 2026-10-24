@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Activity,
@@ -10,6 +10,7 @@ import {
   ClipboardCheck,
   Clock3,
   FileText,
+  LoaderCircle,
   Plus,
   RefreshCw,
   UserPlus,
@@ -17,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { PatientRegistrationDialog } from "@/components/registration/patients/patient-registration-dialog";
-import { useRegistration } from "@/components/registration/registration-provider";
+import { useRegistration } from "@/components/registration/use-registration";
 import type {
   PatientRegistration,
   RegistrationStatus,
@@ -73,8 +74,9 @@ function StatCard({
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-slate-500">{title}</p>
+
           <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
             {value.toLocaleString()}
           </p>
@@ -94,20 +96,53 @@ function StatCard({
 
 export function RegistrationDashboardView() {
   const router = useRouter();
-  const { registrations, registerPatient } = useRegistration();
+
+  const {
+    registrations,
+    registerPatient,
+    refreshRegistrations,
+    isLoading,
+    error,
+  } = useRegistration();
 
   const [isRegistrationDialogOpen, setIsRegistrationDialogOpen] =
     useState(false);
   const [notice, setNotice] = useState("");
+  const [activeStatIndex, setActiveStatIndex] = useState(0);
+
+  // Hide the parent page scrollbar while the registration modal is active.
+  useEffect(() => {
+    if (!isRegistrationDialogOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [isRegistrationDialogOpen]);
 
   const stats = useMemo(() => {
     const totalPatients = registrations.length;
+
     const completeRecords = registrations.filter(
       (patient) => patient.status === "Complete",
     ).length;
+
     const pendingReview = registrations.filter(
       (patient) => patient.status === "Pending Review",
     ).length;
+
     const incompleteRecords = registrations.filter(
       (patient) => patient.status === "Incomplete",
     ).length;
@@ -126,25 +161,39 @@ export function RegistrationDashboardView() {
     };
   }, [registrations]);
 
-  const latestRegistrations = useMemo(() => {
-    return [...registrations]
-      .sort((a, b) => {
-        const dateA = new Date(a.registeredAt ?? 0).getTime();
-        const dateB = new Date(b.registeredAt ?? 0).getTime();
+  const latestRegistrations = useMemo(
+    () =>
+      [...registrations]
+        .sort((a, b) => {
+          const dateA = new Date(a.registeredAt).getTime();
+          const dateB = new Date(b.registeredAt).getTime();
 
-        return dateB - dateA;
-      })
-      .slice(0, 5);
-  }, [registrations]);
+          return dateB - dateA;
+        })
+        .slice(0, 5),
+    [registrations],
+  );
 
-  const handleRegisterPatient = (patient: PatientRegistration) => {
-    registerPatient(patient);
-    setNotice("Patient registration completed successfully.");
+  const handleRegisterPatient = async (
+    patient: PatientRegistration,
+  ): Promise<void> => {
+    setNotice("");
+
+    // Let the dialog catch errors and remain open if registration fails.
+    const savedPatient = await registerPatient(patient);
+
+    setNotice(`${savedPatient.fullName} was registered successfully.`);
   };
 
-  const handleOpenRegistration = () => {
+  const handleRefresh = async () => {
     setNotice("");
-    setIsRegistrationDialogOpen(true);
+
+    try {
+      await refreshRegistrations();
+      setNotice("Patient records refreshed successfully.");
+    } catch {
+      // The provider stores the API error for display.
+    }
   };
 
   const getStatusIcon = (status: RegistrationStatus) => {
@@ -178,6 +227,43 @@ export function RegistrationDashboardView() {
     { label: "Incomplete", count: stats.incompleteRecords },
   ];
 
+  const statCards: {
+    title: string;
+    value: number;
+    description: string;
+    icon: typeof Users;
+    iconStyle: string;
+  }[] = [
+    {
+      title: "Total Patients",
+      value: stats.totalPatients,
+      description: "All active patient records",
+      icon: Users,
+      iconStyle: "bg-slate-100 text-slate-700",
+    },
+    {
+      title: "Complete Records",
+      value: stats.completeRecords,
+      description: "Records marked as complete",
+      icon: CheckCircle2,
+      iconStyle: "bg-emerald-50 text-emerald-700",
+    },
+    {
+      title: "Pending Review",
+      value: stats.pendingReview,
+      description: "Records awaiting staff review",
+      icon: Clock3,
+      iconStyle: "bg-amber-50 text-amber-700",
+    },
+    {
+      title: "Incomplete Records",
+      value: stats.incompleteRecords,
+      description: "Records that may need information",
+      icon: AlertCircle,
+      iconStyle: "bg-rose-50 text-rose-700",
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Page heading */}
@@ -200,15 +286,46 @@ export function RegistrationDashboardView() {
 
         <button
           type="button"
-          onClick={() => router.refresh()}
-          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          onClick={handleRefresh}
+          disabled={isLoading}
+          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <RefreshCw className="h-4 w-4" />
-          Refresh
+          {isLoading ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          {isLoading ? "Loading..." : "Refresh"}
         </button>
       </div>
 
-      {/* Demo notice */}
+      {/* API feedback */}
+      {notice && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+        >
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          <p>{notice}</p>
+        </div>
+      )}
+
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              Unable to load or update patient records
+            </p>
+            <p className="mt-1">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Registration overview */}
       <div className="flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/70 p-4">
         <div className="mt-0.5 text-teal-700">
           <FileText className="h-5 w-5" />
@@ -227,39 +344,66 @@ export function RegistrationDashboardView() {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Total Patients"
-          value={stats.totalPatients}
-          description="All registered patient records"
-          icon={Users}
-          iconStyle="bg-slate-100 text-slate-700"
-        />
+      <section aria-label="Patient statistics">
+        {/* Mobile pagination */}
+        <div className="sm:hidden">
+          <StatCard {...statCards[activeStatIndex]} />
 
-        <StatCard
-          title="Complete Records"
-          value={stats.completeRecords}
-          description="Records marked as complete"
-          icon={CheckCircle2}
-          iconStyle="bg-emerald-50 text-emerald-700"
-        />
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                setActiveStatIndex((current) => Math.max(0, current - 1))
+              }
+              disabled={activeStatIndex === 0}
+              className="inline-flex cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
 
-        <StatCard
-          title="Pending Review"
-          value={stats.pendingReview}
-          description="Records awaiting staff review"
-          icon={Clock3}
-          iconStyle="bg-amber-50 text-amber-700"
-        />
+            <div className="flex items-center justify-center gap-2">
+              {statCards.map((card, index) => (
+                <button
+                  key={card.title}
+                  type="button"
+                  onClick={() => setActiveStatIndex(index)}
+                  aria-label={`Show ${card.title}`}
+                  aria-current={activeStatIndex === index ? "page" : undefined}
+                  className={`h-2.5 cursor-pointer rounded-full transition-all ${
+                    activeStatIndex === index
+                      ? "w-6 bg-teal-600"
+                      : "w-2.5 bg-slate-300 hover:bg-slate-400"
+                  }`}
+                />
+              ))}
+            </div>
 
-        <StatCard
-          title="Incomplete Records"
-          value={stats.incompleteRecords}
-          description="Records that may need information"
-          icon={AlertCircle}
-          iconStyle="bg-rose-50 text-rose-700"
-        />
-      </div>
+            <button
+              type="button"
+              onClick={() =>
+                setActiveStatIndex((current) =>
+                  Math.min(statCards.length - 1, current + 1),
+                )
+              }
+              disabled={activeStatIndex === statCards.length - 1}
+              className="inline-flex cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+
+          <p className="mt-2 text-center text-xs text-slate-500">
+            {activeStatIndex + 1} of {statCards.length} statistics
+          </p>
+        </div>
+
+        {/* Tablet and desktop grid */}
+        <div className="hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+          {statCards.map((card) => (
+            <StatCard key={card.title} {...card} />
+          ))}
+        </div>
+      </section>
 
       {/* Main dashboard sections */}
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
@@ -309,8 +453,8 @@ export function RegistrationDashboardView() {
             </div>
 
             <p className="mt-3 text-xs leading-5 text-slate-500">
-              This percentage is based on the number of records currently marked
-              as Complete.
+              This percentage is based on the number of active records currently
+              marked as Complete.
             </p>
           </div>
 
@@ -369,7 +513,10 @@ export function RegistrationDashboardView() {
           <div className="mt-5 space-y-3">
             <button
               type="button"
-              onClick={handleOpenRegistration}
+              onClick={() => {
+                setNotice("");
+                setIsRegistrationDialogOpen(true);
+              }}
               className="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-4 text-left transition hover:border-teal-300 hover:bg-teal-50/50"
             >
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-teal-600 text-white">
@@ -432,7 +579,7 @@ export function RegistrationDashboardView() {
         </section>
       </div>
 
-      {/* Latest registrations, not a duplicate patient table */}
+      {/* Latest registrations */}
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -454,11 +601,19 @@ export function RegistrationDashboardView() {
           </button>
         </div>
 
-        {latestRegistrations.length > 0 ? (
+        {isLoading ? (
+          <div
+            role="status"
+            className="flex items-center justify-center gap-2 px-5 py-12 text-sm text-slate-500"
+          >
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            Loading patient registrations...
+          </div>
+        ) : latestRegistrations.length > 0 ? (
           <div className="divide-y divide-slate-100">
             {latestRegistrations.map((patient) => (
               <div
-                key={patient.id ?? patient.patientId}
+                key={patient.id}
                 className="flex flex-col gap-3 px-5 py-4 transition hover:bg-slate-50/70 sm:flex-row sm:items-center"
               >
                 <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -490,6 +645,11 @@ export function RegistrationDashboardView() {
               </div>
             ))}
           </div>
+        ) : error ? (
+          <div className="px-5 py-10 text-center text-sm text-slate-500">
+            Patient registrations could not be loaded. Resolve the error above
+            and use Refresh to try again.
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center px-5 py-12 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-500">
@@ -507,7 +667,10 @@ export function RegistrationDashboardView() {
 
             <button
               type="button"
-              onClick={handleOpenRegistration}
+              onClick={() => {
+                setNotice("");
+                setIsRegistrationDialogOpen(true);
+              }}
               className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-teal-700"
             >
               <Plus className="h-4 w-4" />
@@ -516,16 +679,6 @@ export function RegistrationDashboardView() {
           </div>
         )}
       </section>
-
-      {notice && (
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
-        >
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          {notice}
-        </div>
-      )}
 
       <PatientRegistrationDialog
         open={isRegistrationDialogOpen}

@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, ShieldCheck } from "lucide-react";
+import { LogOut, Menu, ShieldCheck, X } from "lucide-react";
 
 import { AUTH_ROLE_KEY, AUTH_TOKEN_KEY } from "@/lib/api";
+import { useAdminNavigation } from "@/components/admin/admin-navigation-context";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,26 +22,52 @@ import {
 
 export function AdminHeader() {
   const router = useRouter();
+
+  const { mobileMenuOpen, setMobileMenuOpen } = useAdminNavigation();
+
   const [logoutOpen, setLogoutOpen] = useState(false);
 
   function handleLogout() {
     window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
     window.sessionStorage.removeItem(AUTH_ROLE_KEY);
 
+    setMobileMenuOpen(false);
     setLogoutOpen(false);
     router.replace("/login");
   }
 
+  function openLogoutConfirmation() {
+    setMobileMenuOpen(false);
+    setLogoutOpen(true);
+  }
+
   return (
     <>
-      <header className="sticky top-0 z-20 flex h-[76px] items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
-        {/* Workspace information */}
-        <div className="min-w-0">
-          <h2 className="truncate text-sm font-semibold text-slate-800 sm:text-base">
-            Healthcare Data Integration
-          </h2>
+      <header className="sticky top-0 z-20 flex min-h-[76px] items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
+        {/* Workspace information and mobile menu */}
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label={
+              mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"
+            }
+            aria-expanded={mobileMenuOpen}
+            aria-controls="admin-mobile-sidebar"
+            className="inline-flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 lg:hidden"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
 
-          <p className="mt-1 text-xs text-slate-500">Administrator Workspace</p>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-slate-800 sm:text-base">
+              Healthcare Data Integration
+            </h2>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Administrator Workspace
+            </p>
+          </div>
         </div>
 
         {/* Account actions */}
@@ -49,7 +76,7 @@ export function AdminHeader() {
             variant="outline"
             className="hidden border-teal-200 bg-teal-50 text-teal-800 sm:inline-flex"
           >
-            User API
+            Live API
           </Badge>
 
           <div className="hidden h-8 w-px bg-slate-200 sm:block" />
@@ -77,7 +104,7 @@ export function AdminHeader() {
             variant="outline"
             size="sm"
             aria-label="Log out"
-            onClick={() => setLogoutOpen(true)}
+            onClick={openLogoutConfirmation}
             className="h-9 cursor-pointer gap-2 border-slate-200 text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
           >
             <LogOut size={16} />

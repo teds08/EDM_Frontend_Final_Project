@@ -1,14 +1,46 @@
-export type AuditOutcome = "Success" | "Warning" | "Failed";
+export type AuditActorRole =
+  | "ADMIN"
+  | "REGISTRATION"
+  | "LABORATORY"
+  | "BILLING";
+
+export type AuditOutcome = "SUCCESS";
 
 export interface AuditLog {
-  id: string;
-  timestamp: string;
-  actor: string;
-  role: string;
+  id: number;
+  actorUserId: number;
+  actorName: string;
+  actorRole: AuditActorRole;
   action: string;
-  category: string;
+  resourceType: string;
+  resourceId: number;
   outcome: AuditOutcome;
-  resource: string;
-  resourceId: string;
   details: string;
+  createdAt: string;
+}
+
+export interface AuditLogPagination {
+  page: number;
+  limit: number;
+  totalRecords: number;
+  totalPages: number;
+}
+
+export interface AuditLogListResponse {
+  success: boolean;
+  message: string;
+  data: AuditLog[];
+  pagination: AuditLogPagination;
+}
+
+export interface AuditLogQueryParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  action?: string;
+  resourceType?: string;
+  actorRole?: AuditActorRole;
+  outcome?: AuditOutcome;
+  startDate?: string;
+  endDate?: string;
 }

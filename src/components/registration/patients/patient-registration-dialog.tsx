@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { AlertCircle, UserPlus, X } from "lucide-react";
+import { AlertCircle, LoaderCircle, UserPlus, X } from "lucide-react";
 import type {
   CivilStatus,
   Gender,
@@ -14,7 +14,7 @@ interface PatientRegistrationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   existingRegistrations: PatientRegistration[];
-  onRegister: (patient: PatientRegistration) => void;
+  onRegister: (patient: PatientRegistration) => Promise<void>;
 }
 
 interface PatientFormValues {
@@ -42,6 +42,14 @@ const fieldClassName =
 
 const labelClassName = "mb-2 block text-sm font-medium text-slate-700";
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unable to register the patient. Please try again.";
+}
+
 export function PatientRegistrationDialog({
   open,
   onOpenChange,
@@ -50,8 +58,11 @@ export function PatientRegistrationDialog({
 }: PatientRegistrationDialogProps) {
   const [values, setValues] = useState<PatientFormValues>(initialValues);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const closeDialog = () => {
+    if (isSubmitting) return;
+
     setValues(initialValues);
     setError("");
     onOpenChange(false);
@@ -61,7 +72,7 @@ export function PatientRegistrationDialog({
     if (!open) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !isSubmitting) {
         setValues(initialValues);
         setError("");
         onOpenChange(false);
@@ -73,7 +84,7 @@ export function PatientRegistrationDialog({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, onOpenChange]);
+  }, [open, isSubmitting, onOpenChange]);
 
   if (!open) return null;
 
@@ -85,11 +96,14 @@ export function PatientRegistrationDialog({
       ...current,
       [field]: value,
     }));
+
     setError("");
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (isSubmitting) return;
 
     const fullName = values.fullName.trim();
     const email = values.email.trim().toLowerCase();
@@ -120,17 +134,11 @@ export function PatientRegistrationDialog({
       return;
     }
 
-    const currentYear = new Date().getFullYear();
-
-    const highestSequence = existingRegistrations.reduce((highest, patient) => {
-      const match = patient.patientId.match(/(\d+)$/);
-
-      return match ? Math.max(highest, Number(match[1])) : highest;
-    }, 1000);
-
+    // The backend generates the actual database ID, patient ID,
+    // registration timestamp, and registration status.
     const newPatient: PatientRegistration = {
-      id: `reg-${Date.now()}`,
-      patientId: `CB-${currentYear}-${highestSequence + 1}`,
+      id: "",
+      patientId: "",
       fullName,
       email,
       contactNumber,
@@ -138,19 +146,31 @@ export function PatientRegistrationDialog({
       gender: values.gender,
       religion: values.religion,
       civilStatus: values.civilStatus,
-      registeredAt: new Date().toISOString(),
-      status: "Complete" satisfies RegistrationStatus,
+      registeredAt: "",
+      status: "Pending Review" satisfies RegistrationStatus,
     };
 
-    onRegister(newPatient);
-    closeDialog();
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      await onRegister(newPatient);
+
+      setValues(initialValues);
+      setError("");
+      onOpenChange(false);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !isSubmitting) {
           closeDialog();
         }
       }}
@@ -183,8 +203,9 @@ export function PatientRegistrationDialog({
           <button
             type="button"
             onClick={closeDialog}
+            disabled={isSubmitting}
             aria-label="Close registration form"
-            className="cursor-pointer rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="cursor-pointer rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -205,6 +226,7 @@ export function PatientRegistrationDialog({
                 autoComplete="name"
                 required
                 maxLength={150}
+                disabled={isSubmitting}
                 value={values.fullName}
                 onChange={(event) =>
                   updateField("fullName", event.target.value)
@@ -224,6 +246,7 @@ export function PatientRegistrationDialog({
                 autoComplete="email"
                 required
                 maxLength={254}
+                disabled={isSubmitting}
                 value={values.email}
                 onChange={(event) => updateField("email", event.target.value)}
                 placeholder="patient@example.com"
@@ -244,6 +267,7 @@ export function PatientRegistrationDialog({
                 autoComplete="tel"
                 required
                 maxLength={30}
+                disabled={isSubmitting}
                 value={values.contactNumber}
                 onChange={(event) =>
                   updateField("contactNumber", event.target.value)
@@ -263,6 +287,7 @@ export function PatientRegistrationDialog({
                 required
                 maxLength={300}
                 rows={3}
+                disabled={isSubmitting}
                 value={values.address}
                 onChange={(event) => updateField("address", event.target.value)}
                 placeholder="House number, street, barangay, city, province"
@@ -276,6 +301,7 @@ export function PatientRegistrationDialog({
               </label>
               <select
                 id="patient-gender"
+                disabled={isSubmitting}
                 value={values.gender}
                 onChange={(event) =>
                   updateField("gender", event.target.value as Gender)
@@ -297,6 +323,7 @@ export function PatientRegistrationDialog({
               </label>
               <select
                 id="patient-religion"
+                disabled={isSubmitting}
                 value={values.religion}
                 onChange={(event) =>
                   updateField("religion", event.target.value as Religion)
@@ -318,6 +345,7 @@ export function PatientRegistrationDialog({
               </label>
               <select
                 id="patient-civil-status"
+                disabled={isSubmitting}
                 value={values.civilStatus}
                 onChange={(event) =>
                   updateField("civilStatus", event.target.value as CivilStatus)
@@ -344,9 +372,8 @@ export function PatientRegistrationDialog({
             )}
 
             <p className="text-xs leading-5 text-slate-500">
-              Demo mode: patient data is temporary and will not be saved to the
-              backend or database. Only collect demographic information that is
-              necessary for your system&apos;s purpose.
+              Patient information will be submitted to the backend. The database
+              generates the patient identifiers and registration timestamp.
             </p>
           </div>
 
@@ -354,17 +381,28 @@ export function PatientRegistrationDialog({
             <button
               type="button"
               onClick={closeDialog}
-              className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              disabled={isSubmitting}
+              className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
+              disabled={isSubmitting}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <UserPlus className="h-4 w-4" />
-              Register Patient
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Registering...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4" />
+                  Register Patient
+                </>
+              )}
             </button>
           </div>
         </form>

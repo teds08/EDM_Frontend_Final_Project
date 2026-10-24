@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { AlertCircle, Pencil, X } from "lucide-react";
+import { AlertCircle, LoaderCircle, Pencil, X } from "lucide-react";
 import type {
   CivilStatus,
   Gender,
@@ -14,13 +14,21 @@ interface PatientEditDialogProps {
   patient: PatientRegistration;
   existingRegistrations: PatientRegistration[];
   onClose: () => void;
-  onSave: (patient: PatientRegistration) => void;
+  onSave: (patient: PatientRegistration) => Promise<PatientRegistration | void>;
 }
 
 const fieldClassName =
-  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100";
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
 
 const labelClassName = "mb-2 block text-sm font-medium text-slate-700";
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Unable to update the patient. Please try again.";
+}
 
 export function PatientEditDialog({
   patient,
@@ -39,9 +47,12 @@ export function PatientEditDialog({
   );
   const [status, setStatus] = useState<RegistrationStatus>(patient.status);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (isSubmitting) return;
 
     const normalizedName = fullName.trim();
     const normalizedEmail = email.trim().toLowerCase();
@@ -79,7 +90,7 @@ export function PatientEditDialog({
       return;
     }
 
-    onSave({
+    const updatedPatient: PatientRegistration = {
       ...patient,
       fullName: normalizedName,
       email: normalizedEmail,
@@ -89,14 +100,28 @@ export function PatientEditDialog({
       religion,
       civilStatus,
       status,
-    });
+    };
+
+    setIsSubmitting(true);
+    setError("");
+
+    try {
+      await onSave(updatedPatient);
+      onClose();
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget && !isSubmitting) {
+          onClose();
+        }
       }}
     >
       <section
@@ -127,8 +152,9 @@ export function PatientEditDialog({
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             aria-label="Close edit form"
-            className="cursor-pointer rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="cursor-pointer rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -148,6 +174,7 @@ export function PatientEditDialog({
                 required
                 maxLength={150}
                 autoComplete="name"
+                disabled={isSubmitting}
                 value={fullName}
                 onChange={(event) => {
                   setFullName(event.target.value);
@@ -167,6 +194,7 @@ export function PatientEditDialog({
                 required
                 maxLength={254}
                 autoComplete="email"
+                disabled={isSubmitting}
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value);
@@ -186,6 +214,7 @@ export function PatientEditDialog({
                 required
                 maxLength={30}
                 autoComplete="tel"
+                disabled={isSubmitting}
                 value={contactNumber}
                 onChange={(event) => {
                   setContactNumber(event.target.value);
@@ -205,6 +234,7 @@ export function PatientEditDialog({
                 required
                 maxLength={300}
                 rows={3}
+                disabled={isSubmitting}
                 value={address}
                 onChange={(event) => {
                   setAddress(event.target.value);
@@ -220,8 +250,12 @@ export function PatientEditDialog({
               </label>
               <select
                 id="edit-patient-gender"
+                disabled={isSubmitting}
                 value={gender}
-                onChange={(event) => setGender(event.target.value as Gender)}
+                onChange={(event) => {
+                  setGender(event.target.value as Gender);
+                  setError("");
+                }}
                 className={`${fieldClassName} cursor-pointer`}
               >
                 <option value="Prefer not to say">Prefer not to say</option>
@@ -239,10 +273,12 @@ export function PatientEditDialog({
               </label>
               <select
                 id="edit-patient-religion"
+                disabled={isSubmitting}
                 value={religion}
-                onChange={(event) =>
-                  setReligion(event.target.value as Religion)
-                }
+                onChange={(event) => {
+                  setReligion(event.target.value as Religion);
+                  setError("");
+                }}
                 className={`${fieldClassName} cursor-pointer`}
               >
                 <option value="Prefer not to say">Prefer not to say</option>
@@ -250,6 +286,7 @@ export function PatientEditDialog({
                 <option value="Christian">Christian</option>
                 <option value="Islam">Islam</option>
                 <option value="Iglesia ni Cristo">Iglesia ni Cristo</option>
+                <option value="Atheist">Atheist</option>
                 <option value="Other">Other</option>
               </select>
             </div>
@@ -263,10 +300,12 @@ export function PatientEditDialog({
               </label>
               <select
                 id="edit-patient-civil-status"
+                disabled={isSubmitting}
                 value={civilStatus}
-                onChange={(event) =>
-                  setCivilStatus(event.target.value as CivilStatus)
-                }
+                onChange={(event) => {
+                  setCivilStatus(event.target.value as CivilStatus);
+                  setError("");
+                }}
                 className={`${fieldClassName} cursor-pointer`}
               >
                 <option value="Prefer not to say">Prefer not to say</option>
@@ -284,10 +323,12 @@ export function PatientEditDialog({
               </label>
               <select
                 id="edit-patient-status"
+                disabled={isSubmitting}
                 value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value as RegistrationStatus)
-                }
+                onChange={(event) => {
+                  setStatus(event.target.value as RegistrationStatus);
+                  setError("");
+                }}
                 className={`${fieldClassName} cursor-pointer`}
               >
                 <option value="Complete">Complete</option>
@@ -307,8 +348,8 @@ export function PatientEditDialog({
             )}
 
             <p className="text-xs leading-5 text-slate-500">
-              Demo mode: changes are temporary and will not be saved to the
-              database.
+              Changes are submitted to the backend and saved only when the
+              update request succeeds.
             </p>
           </div>
 
@@ -316,17 +357,28 @@ export function PatientEditDialog({
             <button
               type="button"
               onClick={onClose}
-              className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              disabled={isSubmitting}
+              className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Cancel
             </button>
 
             <button
               type="submit"
-              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700"
+              disabled={isSubmitting}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Pencil className="h-4 w-4" />
-              Save Changes
+              {isSubmitting ? (
+                <>
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Pencil className="h-4 w-4" />
+                  Save Changes
+                </>
+              )}
             </button>
           </div>
         </form>

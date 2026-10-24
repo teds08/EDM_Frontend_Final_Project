@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -14,7 +14,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useRegistration } from "@/components/registration/registration-provider";
+import { useRegistration } from "@/components/registration/use-registration";
 import { PatientRegistrationDialog } from "@/components/registration/patients/patient-registration-dialog";
 import { PatientEditDialog } from "@/components/registration/patients/patient-edit-dialog";
 import type {
@@ -51,13 +51,21 @@ function getStatusStyle(status: RegistrationStatus) {
 }
 
 export function PatientRegistryView() {
-  const { registrations, registerPatient, updatePatient, deletePatient } =
-    useRegistration();
+  const {
+    registrations,
+    registerPatient,
+    updatePatient,
+    deletePatient,
+    isLoading,
+    error,
+  } = useRegistration();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [notice, setNotice] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [activeSummaryIndex, setActiveSummaryIndex] = useState(0);
 
   const [viewPatient, setViewPatient] = useState<PatientRegistration | null>(
     null,
@@ -68,6 +76,35 @@ export function PatientRegistryView() {
   const [deleteTarget, setDeleteTarget] = useState<PatientRegistration | null>(
     null,
   );
+
+  // Lock background scrolling whenever any modal is active.
+  useEffect(() => {
+    const isModalOpen =
+      dialogOpen ||
+      Boolean(viewPatient) ||
+      Boolean(editPatient) ||
+      Boolean(deleteTarget);
+
+    if (!isModalOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const previousPaddingRight = document.body.style.paddingRight;
+
+    const scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
+
+    document.body.style.overflow = "hidden";
+
+    // Prevent horizontal layout shifting when the scrollbar disappears.
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.paddingRight = previousPaddingRight;
+    };
+  }, [dialogOpen, viewPatient, editPatient, deleteTarget]);
 
   const completeCount = registrations.filter(
     (patient) => patient.status === "Complete",
@@ -106,42 +143,55 @@ export function PatientRegistryView() {
       });
   }, [registrations, search, statusFilter]);
 
-  const handleRegisterPatient = (patient: PatientRegistration) => {
-    registerPatient(patient);
+  const handleRegisterPatient = async (patient: PatientRegistration) => {
+    setNotice("");
+
+    // Allow the registration dialog to catch failures and remain open.
+    const savedPatient = await registerPatient(patient);
+
     setSearch("");
     setStatusFilter("All");
+    setNotice(`${savedPatient.fullName} was registered successfully.`);
+  };
+
+  const handleUpdatePatient = async (patient: PatientRegistration) => {
+    setNotice("");
+
+    // Let the edit dialog handle errors and close only after success.
+    const savedPatient = await updatePatient(patient);
+
     setNotice(
-      `${patient.fullName} was added to the demonstration patient registry. The record has not been saved to the database.`,
+      `${savedPatient.fullName}'s information was updated successfully.`,
     );
   };
 
-  const handleUpdatePatient = (patient: PatientRegistration) => {
-    updatePatient(patient);
-    setEditPatient(null);
-    setNotice(
-      `${patient.fullName}'s information was updated in the demonstration data.`,
-    );
-  };
-
-  const handleDeletePatient = () => {
-    if (!deleteTarget) return;
+  const handleDeletePatient = async () => {
+    if (!deleteTarget || isDeleting) return;
 
     const deletedName = deleteTarget.fullName;
 
-    deletePatient(deleteTarget.id);
-    setDeleteTarget(null);
-    setViewPatient(null);
+    setNotice("");
+    setIsDeleting(true);
 
-    setNotice(
-      `${deletedName} was removed from the demonstration patient registry. No database record was deleted.`,
-    );
+    try {
+      await deletePatient(deleteTarget.id);
+
+      setDeleteTarget(null);
+      setViewPatient(null);
+      setNotice(`${deletedName} was deleted successfully.`);
+    } catch {
+      // The provider displays the API error.
+      // Keep the confirmation dialog open for a retry.
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const summaryCards = [
     {
       title: "Total Patients",
       value: registrations.length,
-      description: "Records in this session",
+      description: "Records in the active registry",
       icon: Users,
       iconStyle: "bg-blue-50 text-blue-700",
     },
@@ -196,12 +246,15 @@ export function PatientRegistryView() {
 
       <div
         role="note"
-        className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-sm leading-6 text-blue-800"
+        className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700"
       >
-        <p className="font-semibold text-blue-900">Demonstration data</p>
+        <p className="font-semibold text-slate-900">
+          Patient records connected
+        </p>
         <p className="mt-1">
-          Patient registrations, edits, and deletions are temporary in-memory
-          changes. They are not saved to the backend or database.
+          Patient registrations, updates, and deletions are processed through
+          the backend API. Deleted records are handled by the backend&apos;s
+          soft-delete operation.
         </p>
       </div>
 
@@ -222,33 +275,142 @@ export function PatientRegistryView() {
         </div>
       )}
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map((card) => {
-          const Icon = card.icon;
+      {isLoading && (
+        <div
+          role="status"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600"
+        >
+          Loading patient records...
+        </div>
+      )}
 
-          return (
-            <article
-              key={card.title}
-              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/60"
+      {error && (
+        <div
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          <p className="font-semibold">
+            Unable to complete the patient request
+          </p>
+          <p className="mt-1">{error}</p>
+        </div>
+      )}
+
+      {/* Summary Cards */}
+      <section aria-label="Patient summary statistics">
+        {/* Mobile: one card at a time with pagination */}
+        <div className="sm:hidden">
+          {summaryCards[activeSummaryIndex] &&
+            (() => {
+              const card = summaryCards[activeSummaryIndex];
+              const Icon = card.icon;
+
+              return (
+                <article
+                  key={card.title}
+                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/60"
+                >
+                  <div
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.iconStyle}`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+
+                  <p className="mt-5 text-sm font-medium text-slate-500">
+                    {card.title}
+                  </p>
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+                    {card.value.toLocaleString()}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {card.description}
+                  </p>
+                </article>
+              );
+            })()}
+
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                setActiveSummaryIndex((current) => Math.max(0, current - 1))
+              }
+              disabled={activeSummaryIndex === 0}
+              className="inline-flex cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <div
-                className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.iconStyle}`}
-              >
-                <Icon className="h-5 w-5" />
-              </div>
+              Previous
+            </button>
 
-              <p className="mt-5 text-sm font-medium text-slate-500">
-                {card.title}
-              </p>
-              <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
-                {card.value.toLocaleString()}
-              </p>
-              <p className="mt-2 text-xs text-slate-500">{card.description}</p>
-            </article>
-          );
-        })}
+            <div className="flex items-center justify-center gap-2">
+              {summaryCards.map((card, index) => (
+                <button
+                  key={card.title}
+                  type="button"
+                  onClick={() => setActiveSummaryIndex(index)}
+                  aria-label={`Show ${card.title}`}
+                  aria-current={
+                    activeSummaryIndex === index ? "page" : undefined
+                  }
+                  className={`h-2.5 cursor-pointer rounded-full transition-all ${
+                    activeSummaryIndex === index
+                      ? "w-6 bg-teal-600"
+                      : "w-2.5 bg-slate-300 hover:bg-slate-400"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setActiveSummaryIndex((current) =>
+                  Math.min(summaryCards.length - 1, current + 1),
+                )
+              }
+              disabled={activeSummaryIndex === summaryCards.length - 1}
+              className="inline-flex cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+
+          <p className="mt-2 text-center text-xs text-slate-500">
+            {activeSummaryIndex + 1} of {summaryCards.length} summary cards
+          </p>
+        </div>
+
+        {/* Tablet and desktop: show all cards */}
+        <div className="hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-4">
+          {summaryCards.map((card) => {
+            const Icon = card.icon;
+
+            return (
+              <article
+                key={card.title}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/60"
+              >
+                <div
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.iconStyle}`}
+                >
+                  <Icon className="h-5 w-5" />
+                </div>
+
+                <p className="mt-5 text-sm font-medium text-slate-500">
+                  {card.title}
+                </p>
+                <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
+                  {card.value.toLocaleString()}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  {card.description}
+                </p>
+              </article>
+            );
+          })}
+        </div>
       </section>
 
+      {/* Patient Records */}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-100/60">
         <div className="flex flex-col gap-4 border-b border-slate-100 p-5">
           <div>
@@ -392,13 +554,15 @@ export function PatientRegistryView() {
                 </tr>
               ))}
 
-              {filteredRegistrations.length === 0 && (
+              {!isLoading && filteredRegistrations.length === 0 && (
                 <tr>
                   <td
                     colSpan={6}
                     className="px-5 py-12 text-center text-sm text-slate-500"
                   >
-                    No patient records match your search and filter.
+                    {search.trim() || statusFilter !== "All"
+                      ? "No patient records match your search and filter."
+                      : "No patient records found. Register a patient to get started."}
                   </td>
                 </tr>
               )}
@@ -411,10 +575,11 @@ export function PatientRegistryView() {
             Showing {filteredRegistrations.length} of {registrations.length}{" "}
             patient records
           </span>
-          <span>Temporary session data</span>
+          <span>Connected to patient records API</span>
         </div>
       </section>
 
+      {/* Register Patient Modal */}
       <PatientRegistrationDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
@@ -422,6 +587,7 @@ export function PatientRegistryView() {
         onRegister={handleRegisterPatient}
       />
 
+      {/* Edit Patient Modal */}
       {editPatient && (
         <PatientEditDialog
           key={editPatient.id}
@@ -432,6 +598,7 @@ export function PatientRegistryView() {
         />
       )}
 
+      {/* View Patient Modal */}
       {viewPatient && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
@@ -585,11 +752,12 @@ export function PatientRegistryView() {
         </div>
       )}
 
+      {/* Delete Patient Confirmation Modal */}
       {deleteTarget && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 p-4"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
+            if (event.target === event.currentTarget && !isDeleting) {
               setDeleteTarget(null);
             }
           }}
@@ -620,31 +788,32 @@ export function PatientRegistryView() {
               <span className="font-semibold text-slate-900">
                 {deleteTarget.fullName}
               </span>{" "}
-              ({deleteTarget.patientId}) from the demonstration registry? This
-              cannot be undone within the current session.
+              ({deleteTarget.patientId}) from the active registry?
             </p>
 
             <p className="mt-3 text-xs leading-5 text-slate-500">
-              This only removes the record from temporary frontend state. No
-              database record will be deleted.
+              The backend will soft-delete the patient record so it can be
+              excluded from the active registry.
             </p>
 
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={() => setDeleteTarget(null)}
-                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="cursor-pointer rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Cancel
               </button>
 
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={handleDeletePatient}
-                className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Trash2 className="h-4 w-4" />
-                Delete Patient
+                {isDeleting ? "Deleting..." : "Delete Patient"}
               </button>
             </div>
           </section>

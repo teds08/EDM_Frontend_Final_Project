@@ -1,21 +1,19 @@
 "use client";
 
 import {
-  AlertTriangle,
   CheckCircle2,
   Clock,
   Copy,
   FileText,
   ShieldCheck,
   X,
-  XCircle,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 
 import type {
+  AuditActorRole,
   AuditLog,
-  AuditOutcome,
 } from "@/types/admin-audit-logs/audit-log";
 
 interface AuditLogDetailsDialogProps {
@@ -23,11 +21,30 @@ interface AuditLogDetailsDialogProps {
   onClose: () => void;
 }
 
-const outcomeStyles: Record<AuditOutcome, string> = {
-  Success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  Warning: "border-amber-200 bg-amber-50 text-amber-800",
-  Failed: "border-rose-200 bg-rose-50 text-rose-700",
+const roleLabels: Record<AuditActorRole, string> = {
+  ADMIN: "Administrator",
+  REGISTRATION: "Registration Staff",
+  LABORATORY: "Laboratory Staff",
+  BILLING: "Billing Staff",
 };
+
+function formatTimestamp(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value || "Date unavailable";
+  }
+
+  return new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
 
 export function AuditLogDetailsDialog({
   log,
@@ -37,13 +54,13 @@ export function AuditLogDetailsDialog({
     return null;
   }
 
-  const eventId = log.id;
+  const eventId = String(log.id);
 
   async function copyEventId() {
     try {
       await navigator.clipboard.writeText(eventId);
     } catch {
-      // Clipboard access may be unavailable in insecure contexts.
+      // Clipboard access may be unavailable in some browser contexts.
     }
   }
 
@@ -82,7 +99,7 @@ export function AuditLogDetailsDialog({
               </h2>
 
               <p className="mt-1 text-sm leading-5 text-slate-500">
-                {log.resource}
+                {log.resourceType}
               </p>
             </div>
           </div>
@@ -99,17 +116,13 @@ export function AuditLogDetailsDialog({
 
         {/* Dialog Content */}
         <div className="space-y-5 p-5 sm:p-6">
-          {/* Outcome and Category */}
+          {/* Outcome */}
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className={outcomeStyles[log.outcome]}>
-              {log.outcome === "Success" ? (
-                <CheckCircle2 size={12} className="mr-1.5" />
-              ) : log.outcome === "Warning" ? (
-                <AlertTriangle size={12} className="mr-1.5" />
-              ) : (
-                <XCircle size={12} className="mr-1.5" />
-              )}
-
+            <Badge
+              variant="outline"
+              className="border-emerald-200 bg-emerald-50 text-emerald-700"
+            >
+              <CheckCircle2 size={12} className="mr-1.5" />
               {log.outcome}
             </Badge>
 
@@ -117,29 +130,29 @@ export function AuditLogDetailsDialog({
               variant="outline"
               className="border-slate-200 bg-white text-slate-700"
             >
-              {log.category}
+              {log.resourceType}
             </Badge>
           </div>
 
           {/* Event Metadata */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {/* Event ID */}
+            {/* Audit ID */}
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="flex items-center gap-2 text-slate-500">
                 <FileText size={16} />
-                <p className="text-xs font-medium">Event ID</p>
+                <p className="text-xs font-medium">Audit ID</p>
               </div>
 
               <div className="mt-2 flex items-center gap-2">
                 <p className="break-all font-mono text-sm font-semibold text-slate-800">
-                  {eventId}
+                  {log.id}
                 </p>
 
                 <button
                   type="button"
                   onClick={copyEventId}
-                  title="Copy event ID"
-                  aria-label="Copy event ID"
+                  title="Copy audit ID"
+                  aria-label="Copy audit ID"
                   className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-teal-700"
                 >
                   <Copy size={14} />
@@ -151,11 +164,15 @@ export function AuditLogDetailsDialog({
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="flex items-center gap-2 text-slate-500">
                 <Clock size={16} />
-                <p className="text-xs font-medium">Timestamp</p>
+                <p className="text-xs font-medium">Date and Time</p>
               </div>
 
               <p className="mt-2 text-sm font-semibold text-slate-800">
-                {log.timestamp}
+                {formatTimestamp(log.createdAt)}
+              </p>
+
+              <p className="mt-1 break-all text-xs text-slate-400">
+                {log.createdAt}
               </p>
             </div>
 
@@ -163,47 +180,56 @@ export function AuditLogDetailsDialog({
             <div className="rounded-xl border border-slate-200 p-4">
               <div className="flex items-center gap-2 text-slate-500">
                 <ShieldCheck size={16} />
-                <p className="text-xs font-medium">Actor</p>
+                <p className="text-xs font-medium">Performed By</p>
               </div>
 
               <p className="mt-2 text-sm font-semibold text-slate-800">
-                {log.actor}
+                {log.actorName}
               </p>
 
-              <p className="mt-1 text-xs text-slate-500">{log.role}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {roleLabels[log.actorRole] ?? log.actorRole}
+              </p>
+
+              <p className="mt-2 text-xs text-slate-400">
+                Actor User ID: {log.actorUserId}
+              </p>
+            </div>
+
+            {/* Resource */}
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center gap-2 text-slate-500">
+                <FileText size={16} />
+                <p className="text-xs font-medium">Affected Resource</p>
+              </div>
+
+              <p className="mt-2 text-sm font-semibold text-slate-800">
+                {log.resourceType}
+              </p>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Reference ID: {log.resourceId}
+              </p>
             </div>
           </div>
 
-          {/* Event Description */}
+          {/* Action Details */}
           <div className="rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-800">
-              Event description
+              Action Details
             </h3>
 
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              {log.details}
+              {log.details || "No additional details provided."}
             </p>
           </div>
 
-          {/* Related Resource */}
-          <div className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-800">
-              Related resource
-            </h3>
-
-            <p className="mt-2 text-sm text-slate-600">{log.resource}</p>
-
-            <p className="mt-1 text-xs text-slate-400">
-              Reference ID: {log.resourceId}
-            </p>
-          </div>
-
-          {/* Demo Notice */}
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="text-xs leading-5 text-amber-900">
-              This is a fictional audit record for the academic demonstration.
-              In the connected backend, audit records should be protected from
-              unauthorized modification and deletion.
+          {/* Read-only Notice */}
+          <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+            <p className="text-xs leading-5 text-teal-900">
+              Audit records are read-only. The backend is responsible for
+              recording important changes and protecting audit history from
+              unauthorized modification or deletion.
             </p>
           </div>
         </div>

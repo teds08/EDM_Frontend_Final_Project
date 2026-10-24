@@ -1,77 +1,185 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AlertTriangle, Database, FileSearch, Search } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Database, FileSearch, RefreshCw, ShieldCheck } from "lucide-react";
 
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
-import { AuditLogStats } from "@/components/admin/audit-logs/audit-log-stats";
 import { AuditLogsTable } from "@/components/admin/audit-logs/audit-logs-table";
-import { AuditLogDetailsDialog } from "@/components/admin/audit-logs/audit-log-details-dialog";
+import { AuditLogFilters } from "@/components/shared/audit-logs/audit-log-filters";
+import { AuditLogPagination } from "@/components/shared/audit-logs/audit-log-pagination";
+import { AuditLogEmptyState } from "@/components/shared/audit-logs/audit-log-empty-state";
+import { AuditLogLoading } from "@/components/shared/audit-logs/audit-log-loading";
+import { AuditLogErrorState } from "@/components/shared/audit-logs/audit-log-error-state";
+import { AuditLogDetails } from "@/components/shared/audit-logs/audit-log-details";
 
-import { initialAuditLogs } from "@/data/admin-audit-logs/dummy-data";
+import { getAdminAuditLogs } from "@/lib/api/audit.api";
+import { ApiError, AUTH_ROLE_KEY, AUTH_TOKEN_KEY } from "@/lib/api";
 
 import type {
   AuditLog,
-  AuditOutcome,
+  AuditLogListResponse,
+  AuditLogPagination as AuditLogPaginationData,
+  AuditLogQueryParams,
 } from "@/types/admin-audit-logs/audit-log";
 
-type OutcomeFilter = "All" | AuditOutcome;
+const PAGE_SIZE = 10;
+
+const initialPagination: AuditLogPaginationData = {
+  page: 1,
+  limit: PAGE_SIZE,
+  totalRecords: 0,
+  totalPages: 0,
+};
+
+const initialFilters: AuditLogQueryParams = {
+  page: 1,
+  limit: PAGE_SIZE,
+};
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 400) {
+      return error.message || "Please check your filters and date range.";
+    }
+
+    if (error.status === 403) {
+      return "You do not have permission to view system-wide audit logs.";
+    }
+
+    if (error.status >= 500) {
+      return "The server could not retrieve audit logs. Please try again.";
+    }
+
+    if (error.status === 404) {
+      return "The audit-log endpoint could not be found. Verify the backend route.";
+    }
+
+    return "The request could not be completed. Please try again.";
+  }
+
+  if (
+    error instanceof Error &&
+    error.message.toLowerCase().includes("connect")
+  ) {
+    return "Unable to connect to the backend. Check that the server is running and the API URL is correct.";
+  }
+
+  return "Something went wrong while retrieving audit logs. Please try again.";
+}
 
 export default function AuditLogsView() {
-  const [logs] = useState<AuditLog[]>(initialAuditLogs);
+  const router = useRouter();
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>("All");
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [pagination, setPagination] =
+    useState<AuditLogPaginationData>(initialPagination);
+
+  const [filters, setFilters] = useState<AuditLogQueryParams>(initialFilters);
+
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
 
-  const filteredLogs = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+  const [isLoading, setIsLoading] = useState(true);
+  const [pageError, setPageError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
-    return logs.filter((log) => {
-      const searchableValues = [
-        log.id,
-        log.actor,
-        log.role,
-        log.action,
-        log.outcome,
-        log.resource,
-        log.resourceId,
-        log.details,
-      ];
+  useEffect(() => {
+    let ignoreResponse = false;
 
-      const matchesSearch =
-        normalizedQuery.length === 0 ||
-        searchableValues.some((value) =>
-          value.toLowerCase().includes(normalizedQuery),
-        );
+    async function loadAuditLogs() {
+      setIsLoading(true);
+      setPageError("");
 
-      const matchesOutcome =
-        outcomeFilter === "All" || log.outcome === outcomeFilter;
+      try {
+        const response: AuditLogListResponse = await getAdminAuditLogs(filters);
 
-      return matchesSearch && matchesOutcome;
+        if (ignoreResponse) {
+          return;
+        }
+
+        if (!response.success) {
+          throw new Error(response.message || "Unable to retrieve audit logs.");
+        }
+
+        setLogs(Array.isArray(response.data) ? response.data : []);
+        setPagination(response.pagination);
+      } catch (error) {
+        if (ignoreResponse) {
+          return;
+        }
+
+        if (error instanceof ApiError && error.status === 401) {
+          window.sessionStorage.removeItem(AUTH_TOKEN_KEY);
+          window.sessionStorage.removeItem(AUTH_ROLE_KEY);
+          router.replace("/login");
+          return;
+        }
+
+        setPageError(getErrorMessage(error));
+      } finally {
+        if (!ignoreResponse) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void loadAuditLogs();
+    }, 250);
+
+    return () => {
+      ignoreResponse = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [filters, reloadKey, router]);
+
+  function handleFiltersChange(nextFilters: AuditLogQueryParams) {
+    setFilters({
+      ...nextFilters,
+      page: 1,
+      limit: filters.limit ?? PAGE_SIZE,
     });
-  }, [logs, searchQuery, outcomeFilter]);
-
-  const successfulCount = logs.filter(
-    (log) => log.outcome === "Success",
-  ).length;
-
-  const warningsCount = logs.filter((log) => log.outcome === "Warning").length;
-
-  const failedCount = logs.filter((log) => log.outcome === "Failed").length;
-
-  const hasActiveFilters =
-    searchQuery.trim().length > 0 || outcomeFilter !== "All";
-
-  function clearFilters() {
-    setSearchQuery("");
-    setOutcomeFilter("All");
   }
+
+  function handleClearFilters() {
+    setFilters({
+      page: 1,
+      limit: filters.limit ?? PAGE_SIZE,
+    });
+  }
+
+  function handlePageChange(page: number) {
+    const maxPage = Math.max(1, pagination.totalPages);
+    const safePage = Math.min(Math.max(page, 1), maxPage);
+
+    setFilters((current) => ({
+      ...current,
+      page: safePage,
+    }));
+  }
+
+  function handleLimitChange(limit: number) {
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+
+    setFilters((current) => ({
+      ...current,
+      page: 1,
+      limit: safeLimit,
+    }));
+  }
+
+  const currentPage = filters.page ?? 1;
+  const currentLimit = filters.limit ?? PAGE_SIZE;
+
+  const displayedPagination: AuditLogPaginationData = {
+    ...pagination,
+    page: currentPage,
+    limit: currentLimit,
+  };
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-7">
-      {/* Page Heading */}
       <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <div className="mb-3 flex items-center gap-2 text-xs font-medium text-slate-500">
@@ -85,52 +193,43 @@ export default function AuditLogsView() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Track important changes to user accounts, patient records,
-            laboratory results, and invoices for accountability.
+            Review important changes to patient records, user accounts,
+            laboratory results, and invoices across CareBridge.
           </p>
         </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setReloadKey((current) => current + 1)}
+          disabled={isLoading}
+          className="cursor-pointer"
+        >
+          <RefreshCw
+            size={15}
+            className={`mr-2 ${isLoading ? "animate-spin" : ""}`}
+          />
+          Refresh
+        </Button>
       </section>
 
-      {/* Demo Environment Notice */}
-      <section className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
-          <AlertTriangle size={18} />
+      <section className="flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/80 p-4">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
+          <ShieldCheck size={18} />
         </div>
 
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-amber-950">
-            Demonstration environment
+          <h2 className="text-sm font-semibold text-teal-950">
+            Centralized Audit Trail
           </h2>
 
-          <p className="mt-1 text-sm leading-5 text-amber-900/80">
-            These are fictional audit records representing important changes.
-            Routine page views, login attempts, and reviews that do not change
-            data are excluded from this sample audit trail.
+          <p className="mt-1 text-sm leading-5 text-teal-900/80">
+            Audit records are retrieved directly from the backend. This page is
+            read-only and does not create, modify, or delete audit events.
           </p>
         </div>
       </section>
 
-      {/* Statistics */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">
-            Activity Summary
-          </h2>
-
-          <p className="mt-1 text-sm text-slate-500">
-            Outcome counts are based on the complete sample audit dataset.
-          </p>
-        </div>
-
-        <AuditLogStats
-          total={logs.length}
-          successful={successfulCount}
-          warnings={warningsCount}
-          failed={failedCount}
-        />
-      </section>
-
-      {/* Audit Events */}
       <section className="space-y-4">
         <div>
           <h2 className="text-base font-semibold text-slate-900">
@@ -138,98 +237,87 @@ export default function AuditLogsView() {
           </h2>
 
           <p className="mt-1 text-sm text-slate-500">
-            Search recorded changes, filter by outcome, and inspect individual
-            events for more information.
+            Search recorded changes, filter results, and inspect individual
+            audit events.
           </p>
         </div>
 
-        {/* Search and Filters */}
-        <Card className="border-slate-200/80 shadow-sm shadow-slate-200/30">
-          <CardContent className="space-y-3 p-4">
-            <div className="relative">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-              />
-
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search by event, user, resource, reference ID, or details..."
-                aria-label="Search audit logs"
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus-visible:border-teal-600 focus-visible:ring-1 focus-visible:ring-teal-600"
-              />
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="w-full space-y-1.5 sm:max-w-xs">
-                <label
-                  htmlFor="audit-outcome-filter"
-                  className="text-xs font-medium text-slate-500"
-                >
-                  Outcome
-                </label>
-
-                <select
-                  id="audit-outcome-filter"
-                  value={outcomeFilter}
-                  onChange={(event) =>
-                    setOutcomeFilter(event.target.value as OutcomeFilter)
-                  }
-                  className="h-10 w-full cursor-pointer rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors focus-visible:border-teal-600 focus-visible:ring-1 focus-visible:ring-teal-600"
-                >
-                  <option value="All">All outcomes</option>
-                  <option value="Success">Success</option>
-                  <option value="Warning">Warning</option>
-                  <option value="Failed">Failed</option>
-                </select>
-              </div>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Audit Logs Table */}
-        <AuditLogsTable
-          logs={filteredLogs}
-          onView={(log) => setSelectedLog(log)}
+        <AuditLogFilters
+          filters={filters}
+          onChange={handleFiltersChange}
+          onClear={handleClearFilters}
+          showActorRole
         />
+
+        {pageError && (
+          <AuditLogErrorState
+            message={pageError}
+            onRetry={() => setReloadKey((current) => current + 1)}
+            loading={isLoading}
+          />
+        )}
+
+        {!pageError && isLoading && logs.length === 0 && <AuditLogLoading />}
+
+        {!pageError && !isLoading && logs.length === 0 && (
+          <AuditLogEmptyState
+            title="No audit logs found"
+            description="No records match the selected filters. Try changing your search criteria or date range."
+          />
+        )}
+
+        {!pageError && logs.length > 0 && (
+          <>
+            {isLoading && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2 text-xs text-teal-700"
+              >
+                <RefreshCw size={14} className="animate-spin" />
+                Refreshing audit records...
+              </div>
+            )}
+
+            <AuditLogsTable logs={logs} onView={(log) => setSelectedLog(log)} />
+
+            <AuditLogPagination
+              pagination={displayedPagination}
+              onPageChange={handlePageChange}
+              onLimitChange={handleLimitChange}
+              disabled={isLoading}
+            />
+          </>
+        )}
 
         <p className="flex items-start gap-2 text-xs leading-5 text-slate-400">
           <FileSearch size={14} className="mt-0.5 shrink-0" />
 
           <span>
-            These sample records are read-only. In the connected application,
-            the backend should record important changes when the corresponding
-            operations succeed.
+            Audit records are read-only. The backend is responsible for
+            recording successful changes, validating requests, enforcing role
+            permissions, and protecting audit history.
           </span>
         </p>
       </section>
 
-      {/* Footer */}
       <footer className="flex flex-col gap-2 border-t border-slate-200 pt-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
         <p>CareBridge · Healthcare Data Integration</p>
 
         <p className="inline-flex items-center gap-1.5">
           <Database size={13} />
-          Academic project · Fictional records only
+          Backend audit records
         </p>
       </footer>
 
-      {/* Audit Event Details */}
-      <AuditLogDetailsDialog
+      <AuditLogDetails
         log={selectedLog}
-        onClose={() => setSelectedLog(null)}
+        open={selectedLog !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedLog(null);
+          }
+        }}
       />
     </div>
   );
